@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -5,145 +6,250 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Token types
+// Tokenizer
+
 typedef enum
 {
-    TK_PUNCT, // Operators (+, -)
-    TK_NUM,   // Number literals
-    TK_EOF    // End-of-file
+    TK_PUNCT, // Punctuators
+    TK_NUM,   // Numeric literals
+    TK_EOF,   // End-of-file markers
 } TokenKind;
 
-// Token structure
-typedef struct Token
+typedef struct Token Token;
+struct Token
 {
     TokenKind kind;
-    struct Token *next;
-    int val;
-    char *loc;
-    int len;
-} Token;
+    Token *next;
+    int value;
+    char *location;
+    int length;
+};
 
-static char *input; // Input string
+static char *input;
 
-// Error reporting
+// Error handling functions
 static void error(const char *fmt, ...)
 {
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
+    va_list argPrt;
+    va_start(argPrt, fmt);
+    vfprintf(stderr, fmt, argPrt);
     fprintf(stderr, "\n");
     exit(1);
 }
 
-static void error_at(char *loc, const char *fmt, ...)
+static void error_at(char *location, const char *fmt, ...)
 {
-    va_list ap;
-    va_start(ap, fmt);
-    int pos = loc - input;
+    va_list argPrt;
+    va_start(argPrt, fmt);
+    int pos = location - input;
     fprintf(stderr, "%s\n%*s^ ", input, pos, "");
-    vfprintf(stderr, fmt, ap);
+    vfprintf(stderr, fmt, argPrt);
     fprintf(stderr, "\n");
     exit(1);
 }
 
-// Token utilities
-static bool equal(Token *tok, const char *op)
+// Token utility functions
+static bool equal(Token *token, char *op)
 {
-    return memcmp(tok->loc, op, tok->len) == 0 && op[tok->len] == '\0';
+    return memcmp(token->location, op, token->length) == 0 && op[token->length] == '\0';
 }
 
-static Token *skip(Token *tok, const char *s)
+static Token *skip(Token *token, char *s)
 {
-    if (!equal(tok, s))
-        error_at(tok->loc, "expected '%s'", s);
-    return tok->next;
+    if (!equal(token, s))
+        error_at(token->location, "expected '%s'", s);
+    return token->next;
 }
 
-static int get_number(Token *tok)
+static int get_number(Token *token)
 {
-    if (tok->kind != TK_NUM)
-        error_at(tok->loc, "expected a number");
-    return tok->val;
+    if (token->kind != TK_NUM)
+        error_at(token->location, "expected a number");
+    return token->value;
 }
 
+// Creating a new token
 static Token *new_token(TokenKind kind, char *start, char *end)
 {
-    Token *tok = calloc(1, sizeof(Token));
-    tok->kind = kind;
-    tok->loc = start;
-    tok->len = end - start;
-    return tok;
+    Token *token = calloc(1, sizeof(Token));
+    token->kind = kind;
+    token->location = start;
+    token->length = end - start;
+    return token;
 }
 
-// Tokenizer
 static Token *tokenize(void)
 {
-    char *p = input;
+    char *curInput = input;
     Token head = {};
     Token *cur = &head;
 
-    while (*p)
+    while (*curInput)
     {
-        if (isspace(*p))
+        if (isspace(*curInput))
         {
-            p++;
+            curInput++;
             continue;
         }
-
-        if (isdigit(*p))
+        if (isdigit(*curInput))
         {
-            cur = cur->next = new_token(TK_NUM, p, p);
-            char *q = p;
-            cur->val = strtoul(p, &p, 10);
-            cur->len = p - q;
+            cur = cur->next = new_token(TK_NUM, curInput, curInput);
+            char *q = curInput;
+            cur->value = strtoul(curInput, &curInput, 10);
+            cur->length = curInput - q;
             continue;
         }
-
-        if (*p == '+' || *p == '-')
+        if (ispunct(*curInput))
         {
-            cur = cur->next = new_token(TK_PUNCT, p, p + 1);
-            p++;
+            cur = cur->next = new_token(TK_PUNCT, curInput, curInput + 1);
+            curInput++;
             continue;
         }
-
-        error_at(p, "invalid token");
+        error_at(curInput, "invalid token");
     }
-
-    cur->next = new_token(TK_EOF, p, p);
+    cur = cur->next = new_token(TK_EOF, curInput, curInput);
     return head.next;
 }
 
-// Code generation
-static void generate_assembly(Token *tok)
+// Parser
+
+typedef enum
 {
-    printf("  .globl main\nmain:\n");
-    printf("  mov $%d, %%rax\n", get_number(tok));
-    tok = tok->next;
+    ND_ADD,
+    ND_SUB,
+    ND_MUL,
+    ND_DIV,
+    ND_NUM
+} NodeKind;
 
-    while (tok->kind != TK_EOF)
+typedef struct Node Node;
+struct Node
+{
+    NodeKind kind;
+    Node *lhs;
+    Node *rhs;
+    int value;
+};
+
+// Node utility functions
+static Node *new_node(NodeKind kind)
+{
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = kind;
+    return node;
+}
+
+static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs)
+{
+    Node *node = new_node(kind);
+    node->lhs = lhs;
+    node->rhs = rhs;
+    return node;
+}
+
+static Node *new_number(int value)
+{
+    Node *node = new_node(ND_NUM);
+    node->value = value;
+    return node;
+}
+
+// Main parsing logic
+// Parsing based of priority
+static Node *exprssion(Token **rest, Token *token);
+static Node *multiply(Token **rest, Token *token);
+static Node *primary(Token **rest, Token *token);
+
+static Node *exprssion(Token **rest, Token *token)
+{
+    Node *node = multiply(&token, token);
+    while (equal(token, "+") || equal(token, "-"))
     {
-        if (equal(tok, "+"))
-        {
-            printf("  add $%d, %%rax\n", get_number(tok->next));
-            tok = tok->next->next;
-            continue;
-        }
-
-        tok = skip(tok, "-");
-        printf("  sub $%d, %%rax\n", get_number(tok));
-        tok = tok->next;
+        NodeKind kind = equal(token, "+") ? ND_ADD : ND_SUB;
+        node = new_binary(kind, node, multiply(&token, token->next));
     }
+    *rest = token;
+    return node;
+}
 
-    printf("  ret\n");
+static Node *multiply(Token **rest, Token *token)
+{
+    Node *node = primary(&token, token);
+    while (equal(token, "*") || equal(token, "/"))
+    {
+        NodeKind kind = equal(token, "*") ? ND_MUL : ND_DIV;
+        node = new_binary(kind, node, primary(&token, token->next));
+    }
+    *rest = token;
+    return node;
+}
+
+static Node *primary(Token **rest, Token *token)
+{
+    if (equal(token, "("))
+    {
+        Node *node = exprssion(&token, token->next);
+        *rest = skip(token, ")");
+        return node;
+    }
+    if (token->kind == TK_NUM)
+    {
+        Node *node = new_number(token->value);
+        *rest = token->next;
+        return node;
+    }
+    error_at(token->location, "expected an expression");
+}
+
+// Code generator
+static int depth;
+
+static void push(void)
+{
+    printf("  push %%rax\n");
+    depth++;
+}
+
+static void pop(char *arg)
+{
+    printf("  pop %s\n", arg);
+    depth--;
+}
+
+static void generate_expression(Node *node)
+{
+    if (node->kind == ND_NUM)
+    {
+        printf("  mov $%d, %%rax\n", node->value);
+        return;
+    }
+    generate_expression(node->rhs);
+    push();
+    generate_expression(node->lhs);
+    pop("%rdi");
+
+    const char *op_map[] = {"add", "sub", "imul", "idiv"};
+    if (node->kind == ND_DIV)
+        printf("  cqo\n");
+    printf("  %s %%rdi, %%rax\n", op_map[node->kind]);
 }
 
 int main(int argc, char **argv)
 {
     if (argc != 2)
-        error("Usage: %s <expression>", argv[0]);
+        error("%s: invalid number of arguments", argv[0]);
 
     input = argv[1];
-    Token *tok = tokenize();
-    generate_assembly(tok);
+    Token *token = tokenize();
+    Node *node = exprssion(&token, token);
+
+    if (token->kind != TK_EOF)
+        error_at(token->location, "extra token");
+
+    printf("  .globl main\nmain:\n");
+    generate_expression(node);
+    printf("  ret\n");
+
+    assert(depth == 0);
     return 0;
 }
