@@ -164,6 +164,7 @@ static Node *new_unary(NodeKind kind, Node *expr)
 
 // Main parsing logic
 // Parsing based of priority
+// Higher priority/precedence gets parsed frist
 static Node *exprssion(Token **rest, Token *token);
 static Node *multiply(Token **rest, Token *token);
 static Node *unary(Token **rest, Token *tok);
@@ -224,6 +225,7 @@ static Node *primary(Token **rest, Token *token)
 // Code generator
 static int depth;
 
+// Stack utility functions
 static void push(void)
 {
     printf("  push %%rax\n");
@@ -236,6 +238,7 @@ static void pop(char *arg)
     depth--;
 }
 
+// Main assembly code generation from Nodes
 static void generate_expression(Node *node)
 {
     switch (node->kind)
@@ -260,6 +263,8 @@ static void generate_expression(Node *node)
     printf("  %s %%rdi, %%rax\n", op_map[node->kind]);
 }
 
+// Starting logic
+// Currently processing from input only
 int main(int argc, char **argv)
 {
     if (argc != 2)
