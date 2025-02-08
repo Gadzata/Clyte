@@ -119,6 +119,7 @@ typedef enum
     ND_SUB,
     ND_MUL,
     ND_DIV,
+    ND_NEG,
     ND_NUM
 } NodeKind;
 
@@ -154,10 +155,18 @@ static Node *new_number(int value)
     return node;
 }
 
+static Node *new_unary(NodeKind kind, Node *expr)
+{
+    Node *node = new_node(kind);
+    node->lhs = expr;
+    return node;
+}
+
 // Main parsing logic
 // Parsing based of priority
 static Node *exprssion(Token **rest, Token *token);
 static Node *multiply(Token **rest, Token *token);
+static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *token);
 
 static Node *exprssion(Token **rest, Token *token)
@@ -174,14 +183,25 @@ static Node *exprssion(Token **rest, Token *token)
 
 static Node *multiply(Token **rest, Token *token)
 {
-    Node *node = primary(&token, token);
+    Node *node = unary(&token, token);
     while (equal(token, "*") || equal(token, "/"))
     {
         NodeKind kind = equal(token, "*") ? ND_MUL : ND_DIV;
-        node = new_binary(kind, node, primary(&token, token->next));
+        node = new_binary(kind, node, unary(&token, token->next));
     }
     *rest = token;
     return node;
+}
+
+static Node *unary(Token **rest, Token *tok)
+{
+    if (equal(tok, "+"))
+        return unary(rest, tok->next);
+
+    if (equal(tok, "-"))
+        return new_unary(ND_NEG, unary(rest, tok->next));
+
+    return primary(rest, tok);
 }
 
 static Node *primary(Token **rest, Token *token)
@@ -218,11 +238,17 @@ static void pop(char *arg)
 
 static void generate_expression(Node *node)
 {
-    if (node->kind == ND_NUM)
+    switch (node->kind)
     {
+    case ND_NUM:
         printf("  mov $%d, %%rax\n", node->value);
         return;
+    case ND_NEG:
+        generate_expression(node->lhs);
+        printf("  neg %%rax\n");
+        return;
     }
+
     generate_expression(node->rhs);
     push();
     generate_expression(node->lhs);
