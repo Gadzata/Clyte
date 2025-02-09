@@ -78,6 +78,21 @@ static Token *new_token(TokenKind kind, char *start, char *end)
     return token;
 }
 
+static bool startswith(char *curInput, char *op)
+{
+    return strncmp(curInput, op, strlen(op)) == 0;
+}
+
+// Read a punctuator token from p and returns its length.
+static int read_punct(char *curInput)
+{
+    if (startswith(curInput, "==") || startswith(curInput, "!=") ||
+        startswith(curInput, "<=") || startswith(curInput, ">="))
+        return 2;
+
+    return ispunct(*curInput) ? 1 : 0;
+}
+
 static Token *tokenize(void)
 {
     char *curInput = input;
@@ -99,10 +114,11 @@ static Token *tokenize(void)
             cur->length = curInput - q;
             continue;
         }
-        if (ispunct(*curInput))
+        int punct_length = read_punct(curInput);
+        if (punct_length)
         {
-            cur = cur->next = new_token(TK_PUNCT, curInput, curInput + 1);
-            curInput++;
+            cur = cur->next = new_token(TK_PUNCT, curInput, curInput + punct_length);
+            curInput += cur->length;
             continue;
         }
         error_at(curInput, "invalid token");
@@ -120,6 +136,10 @@ typedef enum
     ND_MUL,
     ND_DIV,
     ND_NEG,
+    ND_EQ,
+    ND_NE,
+    ND_LT,
+    ND_LE,
     ND_NUM
 } NodeKind;
 
@@ -166,22 +186,98 @@ static Node *new_unary(NodeKind kind, Node *expr)
 // Parsing based of priority
 // Higher priority/precedence gets parsed frist
 static Node *exprssion(Token **rest, Token *token);
+static Node *equality(Token **rest, Token *tok);
+static Node *relational(Token **rest, Token *tok);
+static Node *add(Token **rest, Token *tok);
 static Node *multiply(Token **rest, Token *token);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *token);
 
 static Node *exprssion(Token **rest, Token *token)
 {
-    Node *node = multiply(&token, token);
-    while (equal(token, "+") || equal(token, "-"))
-    {
-        NodeKind kind = equal(token, "+") ? ND_ADD : ND_SUB;
-        node = new_binary(kind, node, multiply(&token, token->next));
-    }
-    *rest = token;
-    return node;
+    return equality(rest, token);
 }
 
+static Node *equality(Token **rest, Token *token)
+{
+    Node *node = relational(&token, token);
+
+    for (;;)
+    {
+        if (equal(token, "=="))
+        {
+            node = new_binary(ND_EQ, node, relational(&token, token->next));
+            continue;
+        }
+
+        if (equal(token, "!="))
+        {
+            node = new_binary(ND_NE, node, relational(&token, token->next));
+            continue;
+        }
+
+        *rest = token;
+        return node;
+    }
+}
+
+static Node *relational(Token **rest, Token *token)
+{
+    Node *node = add(&token, token);
+
+    for (;;)
+    {
+        if (equal(token, "<"))
+        {
+            node = new_binary(ND_LT, node, add(&token, token->next));
+            continue;
+        }
+
+        if (equal(token, "<="))
+        {
+            node = new_binary(ND_LE, node, add(&token, token->next));
+            continue;
+        }
+
+        if (equal(token, ">"))
+        {
+            node = new_binary(ND_LT, add(&token, token->next), node);
+            continue;
+        }
+
+        if (equal(token, ">="))
+        {
+            node = new_binary(ND_LE, add(&token, token->next), node);
+            continue;
+        }
+
+        *rest = token;
+        return node;
+    }
+}
+
+static Node *add(Token **rest, Token *token)
+{
+    Node *node = multiply(&token, token);
+
+    for (;;)
+    {
+        if (equal(token, "+"))
+        {
+            node = new_binary(ND_ADD, node, multiply(&token, token->next));
+            continue;
+        }
+
+        if (equal(token, "-"))
+        {
+            node = new_binary(ND_SUB, node, multiply(&token, token->next));
+            continue;
+        }
+
+        *rest = token;
+        return node;
+    }
+}
 static Node *multiply(Token **rest, Token *token)
 {
     Node *node = unary(&token, token);
@@ -241,6 +337,9 @@ static void pop(char *arg)
 // Main assembly code generation from Nodes
 static void generate_expression(Node *node)
 {
+    if (!node)
+        error("invalid expression");
+
     switch (node->kind)
     {
     case ND_NUM:
@@ -257,10 +356,37 @@ static void generate_expression(Node *node)
     generate_expression(node->lhs);
     pop("%rdi");
 
-    const char *op_map[] = {"add", "sub", "imul", "idiv"};
+    static const char *binary_ops[] = {
+        [ND_ADD] = "add",
+        [ND_SUB] = "sub",
+        [ND_MUL] = "imul",
+        [ND_DIV] = "idiv"};
+
     if (node->kind == ND_DIV)
         printf("  cqo\n");
-    printf("  %s %%rdi, %%rax\n", op_map[node->kind]);
+
+    if (node->kind >= ND_ADD && node->kind <= ND_DIV)
+    {
+        printf("  %s %%rdi, %%rax\n", binary_ops[node->kind]);
+        return;
+    }
+
+    printf("  cmp %%rdi, %%rax\n");
+
+    static const char *cmp_ops[] = {
+        [ND_EQ] = "sete",
+        [ND_NE] = "setne",
+        [ND_LT] = "setl",
+        [ND_LE] = "setle"};
+
+    if (node->kind >= ND_EQ && node->kind <= ND_LE)
+    {
+        printf("  %s %%al\n", cmp_ops[node->kind]);
+        printf("  movzb %%al, %%rax\n");
+        return;
+    }
+
+    error("invalid expression");
 }
 
 // Starting logic
