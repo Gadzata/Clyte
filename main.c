@@ -11,9 +11,6 @@ int main(int argc, char **argv)
     Token *token = tokenize(input);
     Node *node = parse(token);
 
-    if (token->kind != TK_EOF)
-        error_at(token->location, "extra token");
-
     codegen(node);
     return 0;
 }
