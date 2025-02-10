@@ -10,9 +10,10 @@
 
 typedef enum
 {
-    TK_PUNCT, // Punctuators
-    TK_NUM,   // Numeric literals
-    TK_EOF,   // End-of-file markers
+    TOK_IDENT, // Identifiers
+    TOK_PUNCT, // Punctuators
+    TOK_NUM,   // Numeric literals
+    TOK_EOF,   // End-of-file markers
 } TokenKind;
 
 typedef struct Token Token;
@@ -27,7 +28,7 @@ struct Token
 
 void error(const char *fmt, ...);
 void error_at(char *location, const char *fmt, ...);
-bool equal(Token *token, char *op);
+bool token_equal(Token *token, char *op);
 Token *skip(Token *token, char *s);
 Token *tokenize(char *input);
 
@@ -35,17 +36,19 @@ Token *tokenize(char *input);
 
 typedef enum
 {
-    ND_ADD,
-    ND_SUB,
-    ND_MUL,
-    ND_DIV,
-    ND_NEG,
-    ND_EQ,
-    ND_NE,
-    ND_LT,
-    ND_LE,
-    ND_EXPR_STMT,
-    ND_NUM,
+    NODE_ADD,
+    NODE_SUB,
+    NODE_MUL,
+    NODE_DIV,
+    NODE_NEG,
+    NODE_EQ,
+    NODE_NE,
+    NODE_LT,
+    NODE_LE,
+    NODE_ASSIGN,
+    NODE_EXPR_STMT,
+    NODE_VAR,
+    NODE_NUM,
 } NodeKind;
 
 typedef struct Node Node;
@@ -55,6 +58,7 @@ struct Node
     Node *next;
     Node *lhs;
     Node *rhs;
+    char name;
     int value;
 };
 
