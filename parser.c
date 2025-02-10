@@ -38,41 +38,8 @@ static Node *new_unary(NodeKind kind, Node *expr)
     return node;
 }
 
-// Main parsing logic
-// Parsing based of priority
-// Higher priority/precedence gets parsed frist
-Node *expression(Token **rest, Token *token)
+static Node *getComparisonNode(Token **rest, Token *token, Node *node)
 {
-    return equality(rest, token);
-}
-
-static Node *equality(Token **rest, Token *token)
-{
-    Node *node = relational(&token, token);
-
-    for (;;)
-    {
-        if (equal(token, "=="))
-        {
-            node = new_binary(ND_EQ, node, relational(&token, token->next));
-            continue;
-        }
-
-        if (equal(token, "!="))
-        {
-            node = new_binary(ND_NE, node, relational(&token, token->next));
-            continue;
-        }
-
-        *rest = token;
-        return node;
-    }
-}
-
-static Node *relational(Token **rest, Token *token)
-{
-    Node *node = add(&token, token);
-
     for (;;)
     {
         if (equal(token, "<"))
@@ -104,27 +71,48 @@ static Node *relational(Token **rest, Token *token)
     }
 }
 
+// Main parsing logic
+// Parsing based of priority
+// Higher priority/precedence gets parsed frist
+Node *
+expression(Token **rest, Token *token)
+{
+    return equality(rest, token);
+}
+
+static Node *equality(Token **rest, Token *token)
+{
+    Node *node = relational(&token, token);
+
+    while (equal(token, "==") || equal(token, "!="))
+    {
+        NodeKind kind = equal(token, "==") ? ND_EQ : ND_NE;
+        node = new_binary(kind, node, relational(&token, token->next));
+    }
+
+    *rest = token;
+    return node;
+}
+
+static Node *relational(Token **rest, Token *token)
+{
+    Node *node = add(&token, token);
+
+    return getComparisonNode(rest, token, node);
+}
+
 static Node *add(Token **rest, Token *token)
 {
     Node *node = multiply(&token, token);
 
-    for (;;)
+    while (equal(token, "+") || equal(token, "-"))
     {
-        if (equal(token, "+"))
-        {
-            node = new_binary(ND_ADD, node, multiply(&token, token->next));
-            continue;
-        }
-
-        if (equal(token, "-"))
-        {
-            node = new_binary(ND_SUB, node, multiply(&token, token->next));
-            continue;
-        }
-
-        *rest = token;
-        return node;
+        NodeKind kind = equal(token, "+") ? ND_ADD : ND_SUB;
+        node = new_binary(kind, node, multiply(&token, token->next));
     }
+
+    *rest = token;
+    return node;
 }
 static Node *multiply(Token **rest, Token *token)
 {

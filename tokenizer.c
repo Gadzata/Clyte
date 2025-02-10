@@ -58,22 +58,36 @@ static bool startswith(char *curInput, char *op)
     return strncmp(curInput, op, strlen(op)) == 0;
 }
 
-// Read a punctuator token from p and returns its length.
-static int read_punct(char *curInput)
+static bool isComparisonPunct(char *curInput)
 {
     if (startswith(curInput, "==") || startswith(curInput, "!=") ||
         startswith(curInput, "<=") || startswith(curInput, ">="))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+// Read a punctuator token from p and returns its length.
+static int read_punct(char *curInput)
+{
+    if (isComparisonPunct(curInput))
         return 2;
 
     return ispunct(*curInput) ? 1 : 0;
 }
 
+// Starting the tokenization of the input
 Token *tokenize(char *argInput)
 {
     curInput = argInput;
     Token head = {};
     Token *cur = &head;
 
+    // Looping through the input
     while (*curInput)
     {
         if (isspace(*curInput))
