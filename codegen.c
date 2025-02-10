@@ -70,13 +70,26 @@ void generate_expression(Node *node)
     error("invalid expression");
 }
 
+static void generate_statment(Node *node)
+{
+    if (node->kind == ND_EXPR_STMT)
+    {
+        generate_expression(node->lhs);
+        return;
+    }
+
+    error("invalid statement");
+}
+
 void codegen(Node *node)
 {
     printf("  .globl main\n");
     printf("main:\n");
 
-    generate_expression(node);
+    for (Node *n = node; n; n = n->next)
+    {
+        generate_statment(n);
+        assert(depth == 0);
+    }
     printf("  ret\n");
-
-    assert(depth == 0);
 }

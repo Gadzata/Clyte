@@ -1,6 +1,7 @@
 #include "Clyte.h"
 
-Node *expression(Token **rest, Token *token);
+static Node *expression(Token **rest, Token *token);
+static Node *expression_statement(Token **rest, Token *tok);
 static Node *equality(Token **rest, Token *tok);
 static Node *relational(Token **rest, Token *tok);
 static Node *add(Token **rest, Token *tok);
@@ -74,8 +75,19 @@ static Node *getComparisonNode(Token **rest, Token *token, Node *node)
 // Main parsing logic
 // Parsing based of priority
 // Higher priority/precedence gets parsed frist
-Node *
-expression(Token **rest, Token *token)
+static Node *statment(Token **rest, Token *tok)
+{
+    return expression_statement(rest, tok);
+}
+
+static Node *expression_statement(Token **rest, Token *tok)
+{
+    Node *node = new_unary(ND_EXPR_STMT, expression(&tok, tok));
+    *rest = skip(tok, ";");
+    return node;
+}
+
+static Node *expression(Token **rest, Token *token)
 {
     return equality(rest, token);
 }
@@ -156,8 +168,9 @@ static Node *primary(Token **rest, Token *token)
 
 Node *parse(Token *token)
 {
-    Node *node = expression(&token, token);
-    if (token->kind != TK_EOF)
-        error_at(token->location, "extra token");
-    return node;
+    Node head = {};
+    Node *cur = &head;
+    while (token->kind != TK_EOF)
+        cur = cur->next = statment(&token, token);
+    return head.next;
 }
