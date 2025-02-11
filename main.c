@@ -8,8 +8,9 @@ int main(int argc, char **argv)
         error("%s: invalid number of arguments", argv[0]);
 
     char *input = argv[1];
+
     Token *token = tokenize(input);
-    Node *node = parse(token);
+    Function *node = parse(token);
 
     codegen(node);
     return 0;

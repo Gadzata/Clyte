@@ -72,7 +72,6 @@ typedef enum
     NODE_NUM,
 } NodeKind;
 
-typedef struct Node Node;
 struct Node
 {
     NodeKind kind;

@@ -195,7 +195,7 @@ static Node *primary(Token **rest, Token *token)
     }
     if (token->kind == TOK_IDENT)
     {
-        Bindable *var = find_var(token);
+        Bindable *var = find_variable(token);
         if (!var)
             var = new_lvar(strndup(token->location, token->length));
         *rest = token->next;

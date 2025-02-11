@@ -76,25 +76,31 @@ static bool is_comparison_punct(char *curInput)
     }
 }
 
-// Returns true if c is an alphabetic character or an underscore.
-static bool is_alpha_or_underscore(char identChar)
+// Returns true if the identChar is a value in between first and last
+static bool character_between_values(char identChar, char first, char last)
 {
-    return ('a' <= identChar && identChar <= 'z') || ('A' <= identChar && identChar <= 'Z') || identChar == '_';
+    return first <= identChar && identChar <= last;
 }
 
-// Returns true if c is valid as the first character of an identifier.
+// Returns true if identChar is an alphabetic character or an underscore.
+static bool is_alpha_or_underscore(char identChar)
+{
+    return (character_between_values(identChar, 'a', 'z')) || (character_between_values(identChar, 'A', 'Z')) || identChar == '_';
+}
+
+// Returns true if identChar is valid as the first character of an identifier.
 static bool is_valid_first_identifier(char identChar)
 {
     return is_alpha_or_underscore(identChar);
 }
 
-// Returns true if c is valid as a non-first character of an identifier.
+// Returns true if identChar is valid as a non-first character of an identifier.
 static bool is_valid_non_first_identifier(char identChar)
 {
-    return is_valid_first_identifier(identChar) || ('0' <= identChar && identChar <= '9');
+    return is_valid_first_identifier(identChar) || (character_between_values(identChar, '0', '9'));
 }
 
-// Read a punctuator token from p and returns its length.
+// Read a punctuator token from curInput and returns its length.
 static int read_punct(char *curInput)
 {
     if (is_comparison_punct(curInput))
@@ -126,13 +132,13 @@ Token *tokenize(char *argInput)
             cur->length = curInput - q;
             continue;
         }
-        if (is_ident1(*curInput))
+        if (is_valid_first_identifier(*curInput))
         {
             char *start = curInput;
             do
             {
                 curInput++;
-            } while (is_ident2(*curInput));
+            } while (is_valid_non_first_identifier(*curInput));
             cur = cur->next = new_token(TOK_IDENT, start, curInput);
             continue;
         }
