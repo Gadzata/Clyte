@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>
@@ -5,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+typedef struct Node Node;
 
 // Tokenizer
 
@@ -32,6 +35,24 @@ bool token_equal(Token *token, char *op);
 Token *skip(Token *token, char *s);
 Token *tokenize(char *input);
 
+// Local Variable Object
+typedef struct Bindable Bindable;
+struct Bindable
+{
+    Bindable *next;
+    char *var_name;
+    int offset;
+};
+
+// Function Object
+typedef struct Function Function;
+struct Function
+{
+    Node *body;
+    Bindable *locals;
+    int stack_size;
+};
+
 // Parser
 
 typedef enum
@@ -58,12 +79,12 @@ struct Node
     Node *next;
     Node *lhs;
     Node *rhs;
-    char name;
+    Bindable *var;
     int value;
 };
 
-Node *parse(Token *token);
+Function *parse(Token *token);
 
 // Code generation
 
-void codegen(Node *node);
+void codegen(Function *prog);

@@ -76,6 +76,24 @@ static bool is_comparison_punct(char *curInput)
     }
 }
 
+// Returns true if c is an alphabetic character or an underscore.
+static bool is_alpha_or_underscore(char identChar)
+{
+    return ('a' <= identChar && identChar <= 'z') || ('A' <= identChar && identChar <= 'Z') || identChar == '_';
+}
+
+// Returns true if c is valid as the first character of an identifier.
+static bool is_valid_first_identifier(char identChar)
+{
+    return is_alpha_or_underscore(identChar);
+}
+
+// Returns true if c is valid as a non-first character of an identifier.
+static bool is_valid_non_first_identifier(char identChar)
+{
+    return is_valid_first_identifier(identChar) || ('0' <= identChar && identChar <= '9');
+}
+
 // Read a punctuator token from p and returns its length.
 static int read_punct(char *curInput)
 {
@@ -108,10 +126,14 @@ Token *tokenize(char *argInput)
             cur->length = curInput - q;
             continue;
         }
-        if (check_is_letter(curInput))
+        if (is_ident1(*curInput))
         {
-            cur = cur->next = new_token(TOK_IDENT, curInput, curInput + 1);
-            curInput++;
+            char *start = curInput;
+            do
+            {
+                curInput++;
+            } while (is_ident2(*curInput));
+            cur = cur->next = new_token(TOK_IDENT, start, curInput);
             continue;
         }
         int punct_length = read_punct(curInput);

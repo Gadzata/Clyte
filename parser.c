@@ -1,5 +1,7 @@
 #include "Clyte.h"
 
+Bindable *locals;
+
 static Node *expression(Token **rest, Token *token);
 static Node *expression_statement(Token **rest, Token *tok);
 static Node *assign(Token **rest, Token *tok);
@@ -16,6 +18,14 @@ static Node *new_node(NodeKind kind)
     Node *node = calloc(1, sizeof(Node));
     node->kind = kind;
     return node;
+}
+
+static Bindable *find_variable(Token *token)
+{
+    for (Bindable *var = locals; var; var = var->next)
+        if (strlen(var->var_name) == token->length && !strncmp(token->location, var->var_name, token->length))
+            return var;
+    return NULL;
 }
 
 static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs)
@@ -40,11 +50,20 @@ static Node *new_unary(NodeKind kind, Node *expr)
     return node;
 }
 
-static Node *new_var_node(char name)
+static Node *new_var_node(Bindable *variable)
 {
     Node *node = new_node(NODE_VAR);
-    node->name = name;
+    node->var = variable;
     return node;
+}
+
+static Bindable *new_lvar(char *name)
+{
+    Bindable *var = calloc(1, sizeof(Bindable));
+    var->var_name = name;
+    var->next = locals;
+    locals = var;
+    return var;
 }
 
 static Node *get_comparison_node(Token **rest, Token *token, Node *node)
@@ -176,9 +195,11 @@ static Node *primary(Token **rest, Token *token)
     }
     if (token->kind == TOK_IDENT)
     {
-        Node *node = new_var_node(*token->location);
+        Bindable *var = find_var(token);
+        if (!var)
+            var = new_lvar(strndup(token->location, token->length));
         *rest = token->next;
-        return node;
+        return new_var_node(var);
     }
     if (token->kind == TOK_NUM)
     {
@@ -189,11 +210,15 @@ static Node *primary(Token **rest, Token *token)
     error_at(token->location, "expected an expression");
 }
 
-Node *parse(Token *token)
+Function *parse(Token *token)
 {
     Node head = {};
     Node *cur = &head;
     while (token->kind != TOK_EOF)
         cur = cur->next = statment(&token, token);
-    return head.next;
+
+    Function *prog = calloc(1, sizeof(Function));
+    prog->body = head.next;
+    prog->locals = locals;
+    return prog;
 }

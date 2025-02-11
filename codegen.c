@@ -15,12 +15,27 @@ static void pop(char *arg)
     depth--;
 }
 
+static int align_to(int n, int align)
+{
+    return (n + align - 1) / align * align;
+}
+
+static void assign_lvar_offsets(Function *prog)
+{
+    int offset = 0;
+    for (Bindable *var = prog->locals; var; var = var->next)
+    {
+        offset += 8;
+        var->offset = -offset;
+    }
+    prog->stack_size = align_to(offset, 16);
+}
+
 static void generate_address(Node *node)
 {
     if (node->kind == NODE_VAR)
     {
-        int offset = (node->name - 'a' + 1) * 8;
-        printf("  lea %d(%%rbp), %%rax\n", -offset);
+        printf("  lea %d(%%rbp), %%rax\n", node->var->offset);
         return;
     }
 
@@ -104,26 +119,30 @@ static void generate_statment(Node *node)
     error("invalid statement");
 }
 
-static void starting_code()
+static void starting_code(int stack_size)
 {
     printf("  .globl main\n");
     printf("main:\n");
     printf("  push %%rbp\n");
     printf("  mov %%rsp, %%rbp\n");
-    printf("  sub $208, %%rsp\n");
+    printf("  sub $%d, %%rsp\n", stack_size);
 }
 
-void codegen(Node *node)
+void codegen(Function *prog)
 {
-    starting_code();
+    assign_lvar_offsets(prog);
 
-    for (Node *n = node; n; n = n->next)
+    starting_code(prog->stack_size);
+
+    for (Node *n = prog->body; n; n = n->next)
     {
-        generate_statment(n);
-        assert(depth == 0);
-    }
+        {
+            generate_statment(n);
+            assert(depth == 0);
+        }
 
-    printf("  mov %%rbp, %%rsp\n");
-    printf("  pop %%rbp\n");
-    printf("  ret\n");
+        printf("  mov %%rbp, %%rsp\n");
+        printf("  pop %%rbp\n");
+        printf("  ret\n");
+    }
 }
