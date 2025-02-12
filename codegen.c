@@ -110,9 +110,13 @@ void generate_expression(Node *node)
 
 static void generate_statment(Node *node)
 {
-    if (node->kind == NODE_EXPR_STMT)
+    if (node->kind == NODE_EXPR_STMT || node->kind == NODE_RETURN)
     {
         generate_expression(node->lhs);
+        if (node->kind == NODE_RETURN)
+        {
+            printf("  jmp .L.return\n");
+        }
         return;
     }
 
@@ -140,6 +144,7 @@ void codegen(Function *prog)
         assert(depth == 0);
     }
 
+    printf(".L.return:\n");
     printf("  mov %%rbp, %%rsp\n");
     printf("  pop %%rbp\n");
     printf("  ret\n");

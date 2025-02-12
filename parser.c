@@ -104,6 +104,12 @@ static Node *get_comparison_node(Token **rest, Token *token, Node *node)
 // Higher priority/precedence gets parsed frist
 static Node *statment(Token **rest, Token *tok)
 {
+    if (token_equal(tok, "return"))
+    {
+        Node *node = new_unary(NODE_RETURN, expression(&tok, tok->next));
+        *rest = skip(tok, ";");
+        return node;
+    }
     return expression_statement(rest, tok);
 }
 

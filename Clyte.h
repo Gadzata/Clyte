@@ -13,10 +13,11 @@ typedef struct Node Node;
 
 typedef enum
 {
-    TOK_IDENT, // Identifiers
-    TOK_PUNCT, // Punctuators
-    TOK_NUM,   // Numeric literals
-    TOK_EOF,   // End-of-file markers
+    TOK_IDENT,
+    TOK_PUNCT,
+    TOK_KEYWORD,
+    TOK_NUM,
+    TOK_EOF,
 } TokenKind;
 
 typedef struct Token Token;
@@ -67,6 +68,7 @@ typedef enum
     NODE_LT,
     NODE_LE,
     NODE_ASSIGN,
+    NODE_RETURN,
     NODE_EXPR_STMT,
     NODE_VAR,
     NODE_NUM,

@@ -109,6 +109,13 @@ static int read_punct(char *curInput)
     return ispunct(*curInput) ? 1 : 0;
 }
 
+static void convert_keywords(Token *token)
+{
+    for (Token *tok = token; tok->kind != TOK_EOF; tok = tok->next)
+        if (token_equal(tok, "return"))
+            tok->kind = TOK_KEYWORD;
+}
+
 // Starting the tokenization of the input
 Token *tokenize(char *argInput)
 {
@@ -152,5 +159,7 @@ Token *tokenize(char *argInput)
         error_at(curInput, "invalid token");
     }
     cur = cur->next = new_token(TOK_EOF, curInput, curInput);
+
+    convert_keywords(head.next);
     return head.next;
 }
