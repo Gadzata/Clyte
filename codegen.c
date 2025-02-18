@@ -110,6 +110,12 @@ void generate_expression(Node *node)
 
 static void generate_statment(Node *node)
 {
+    if (node->kind == NODE_BLOCK)
+    {
+        for (Node *n = node->body; n; n = n->next)
+            generate_statment(n);
+        return;
+    }
     if (node->kind == NODE_EXPR_STMT || node->kind == NODE_RETURN)
     {
         generate_expression(node->lhs);
@@ -138,11 +144,8 @@ void codegen(Function *prog)
 
     starting_code(prog);
 
-    for (Node *n = prog->body; n; n = n->next)
-    {
-        generate_statment(n);
-        assert(depth == 0);
-    }
+    generate_statment(prog->body);
+    assert(depth == 0);
 
     printf(".L.return:\n");
     printf("  mov %%rbp, %%rsp\n");

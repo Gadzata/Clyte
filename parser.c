@@ -2,6 +2,7 @@
 
 Bindable *locals;
 
+static Node *compound_statement(Token **rest, Token *tok);
 static Node *expression(Token **rest, Token *token);
 static Node *expression_statement(Token **rest, Token *tok);
 static Node *assign(Token **rest, Token *tok);
@@ -110,7 +111,23 @@ static Node *statment(Token **rest, Token *tok)
         *rest = skip(tok, ";");
         return node;
     }
+    if (token_equal(tok, "{"))
+        return compound_statement(rest, tok->next);
+
     return expression_statement(rest, tok);
+}
+
+static Node *compound_statement(Token **rest, Token *tok)
+{
+    Node head = {};
+    Node *cur = &head;
+    while (!token_equal(tok, "}"))
+        cur = cur->next = statment(&tok, tok);
+
+    Node *node = new_node(NODE_BLOCK);
+    node->body = head.next;
+    *rest = tok->next;
+    return node;
 }
 
 static Node *expression_statement(Token **rest, Token *tok)
@@ -218,13 +235,10 @@ static Node *primary(Token **rest, Token *token)
 
 Function *parse(Token *token)
 {
-    Node head = {};
-    Node *cur = &head;
-    while (token->kind != TOK_EOF)
-        cur = cur->next = statment(&token, token);
+    token = skip(token, "{");
 
     Function *prog = calloc(1, sizeof(Function));
-    prog->body = head.next;
+    prog->body = compound_statement(&token, token);
     prog->locals = locals;
     return prog;
 }
