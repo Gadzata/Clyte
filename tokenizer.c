@@ -100,6 +100,16 @@ static bool is_valid_non_first_identifier(char identChar)
     return is_valid_first_identifier(identChar) || (character_between_values(identChar, '0', '9'));
 }
 
+static bool is_keyword(Token *tok)
+{
+    static char *kw[] = {"return", "if", "else"};
+
+    for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
+        if (token_equal(tok, kw[i]))
+            return true;
+    return false;
+}
+
 // Read a punctuator token from curInput and returns its length.
 static int read_punct(char *curInput)
 {
@@ -112,7 +122,7 @@ static int read_punct(char *curInput)
 static void convert_keywords(Token *token)
 {
     for (Token *tok = token; tok->kind != TOK_EOF; tok = tok->next)
-        if (token_equal(tok, "return"))
+        if (is_keyword(tok))
             tok->kind = TOK_KEYWORD;
 }
 

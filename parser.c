@@ -111,6 +111,20 @@ static Node *statment(Token **rest, Token *tok)
         *rest = skip(tok, ";");
         return node;
     }
+
+    if (token_equal(tok, "if"))
+    {
+        Node *node = new_node(NODE_IF);
+        tok = skip(tok->next, "(");
+        node->cond = expression(&tok, tok);
+        tok = skip(tok, ")");
+        node->then = statment(&tok, tok);
+        if (token_equal(tok, "else"))
+            node->els = statment(&tok, tok->next);
+        *rest = tok;
+        return node;
+    }
+
     if (token_equal(tok, "{"))
         return compound_statement(rest, tok->next);
 
@@ -132,6 +146,12 @@ static Node *compound_statement(Token **rest, Token *tok)
 
 static Node *expression_statement(Token **rest, Token *tok)
 {
+    if (token_equal(tok, ";"))
+    {
+        *rest = tok->next;
+        return new_node(NODE_BLOCK);
+    }
+
     Node *node = new_unary(NODE_EXPR_STMT, expression(&tok, tok));
     *rest = skip(tok, ";");
     return node;

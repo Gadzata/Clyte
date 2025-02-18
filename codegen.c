@@ -15,6 +15,12 @@ static void pop(char *arg)
     depth--;
 }
 
+static int count(void)
+{
+    static int i = 1;
+    return i++;
+}
+
 static int align_to(int n, int align)
 {
     return (n + align - 1) / align * align;
@@ -114,6 +120,20 @@ static void generate_statment(Node *node)
     {
         for (Node *n = node->body; n; n = n->next)
             generate_statment(n);
+        return;
+    }
+    if (node->kind == NODE_IF)
+    {
+        int c = count();
+        generate_expression(node->cond);
+        printf("  cmp $0, %%rax\n");
+        printf("  je  .L.else.%d\n", c);
+        generate_statment(node->then);
+        printf("  jmp .L.end.%d\n", c);
+        printf(".L.else.%d:\n", c);
+        if (node->els)
+            generate_statment(node->els);
+        printf(".L.end.%d:\n", c);
         return;
     }
     if (node->kind == NODE_EXPR_STMT || node->kind == NODE_RETURN)

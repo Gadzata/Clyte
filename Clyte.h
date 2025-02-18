@@ -69,6 +69,7 @@ typedef enum
     NODE_LE,
     NODE_ASSIGN,
     NODE_RETURN,
+    NODE_IF,
     NODE_BLOCK,
     NODE_EXPR_STMT,
     NODE_VAR,
@@ -81,7 +82,13 @@ struct Node
     Node *next;
     Node *lhs;
     Node *rhs;
+
     Node *body;
+
+    Node *cond;
+    Node *then;
+    Node *els;
+
     Bindable *var;
     int value;
 };
