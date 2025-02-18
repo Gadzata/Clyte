@@ -70,6 +70,7 @@ typedef enum
     NODE_ASSIGN,
     NODE_RETURN,
     NODE_IF,
+    NODE_FOR,
     NODE_BLOCK,
     NODE_EXPR_STMT,
     NODE_VAR,
@@ -88,6 +89,9 @@ struct Node
     Node *cond;
     Node *then;
     Node *els;
+
+    Node *init;
+    Node *increment;
 
     Bindable *var;
     int value;

@@ -136,6 +136,25 @@ static void generate_statment(Node *node)
         printf(".L.end.%d:\n", c);
         return;
     }
+    if (node->kind == NODE_FOR)
+    {
+        int c = count();
+        if (node->init)
+            generate_statment(node->init);
+        printf(".L.begin.%d:\n", c);
+        if (node->cond)
+        {
+            generate_expression(node->cond);
+            printf("  cmp $0, %%rax\n");
+            printf("  je  .L.end.%d\n", c);
+        }
+        generate_statment(node->then);
+        if (node->increment)
+            generate_expression(node->increment);
+        printf("  jmp .L.begin.%d\n", c);
+        printf(".L.end.%d:\n", c);
+        return;
+    }
     if (node->kind == NODE_EXPR_STMT || node->kind == NODE_RETURN)
     {
         generate_expression(node->lhs);

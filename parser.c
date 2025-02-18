@@ -125,6 +125,34 @@ static Node *statment(Token **rest, Token *tok)
         return node;
     }
 
+    if (token_equal(tok, "for"))
+    {
+        Node *node = new_node(NODE_FOR);
+        tok = skip(tok->next, "(");
+
+        node->init = expression_statement(&tok, tok);
+
+        if (!token_equal(tok, ";"))
+            node->cond = expression(&tok, tok);
+        tok = skip(tok, ";");
+
+        if (!token_equal(tok, ")"))
+            node->increment = expression(&tok, tok);
+        tok = skip(tok, ")");
+
+        node->then = statment(rest, tok);
+        return node;
+    }
+    if (token_equal(tok, "while"))
+    {
+        Node *node = new_node(NODE_FOR);
+        tok = skip(tok->next, "(");
+        node->cond = expression(&tok, tok);
+        tok = skip(tok, ")");
+        node->then = statment(rest, tok);
+        return node;
+    }
+
     if (token_equal(tok, "{"))
         return compound_statement(rest, tok->next);
 

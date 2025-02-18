@@ -102,7 +102,7 @@ static bool is_valid_non_first_identifier(char identChar)
 
 static bool is_keyword(Token *tok)
 {
-    static char *kw[] = {"return", "if", "else"};
+    static char *kw[] = {"return", "if", "else", "for", "while"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
         if (token_equal(tok, kw[i]))
