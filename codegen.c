@@ -45,7 +45,7 @@ static void generate_address(Node *node)
         return;
     }
 
-    error("not an lvalue");
+    error_at(node->token->location, "not an lvalue");
 }
 
 // Main assembly code generation from Nodes
@@ -111,7 +111,7 @@ void generate_expression(Node *node)
         return;
     }
 
-    error("invalid expression");
+    error_at(node->token->location, "invalid expression");
 }
 
 static void generate_statment(Node *node)
@@ -165,7 +165,7 @@ static void generate_statment(Node *node)
         return;
     }
 
-    error("invalid statement");
+    error_at(node->token->location, "invalid statement");
 }
 
 static void starting_code(Function *prog)

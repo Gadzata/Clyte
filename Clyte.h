@@ -81,6 +81,7 @@ struct Node
 {
     NodeKind kind;
     Node *next;
+    Token *token;
     Node *lhs;
     Node *rhs;
 

@@ -3,8 +3,8 @@
 Bindable *locals;
 
 static Node *compound_statement(Token **rest, Token *tok);
-static Node *expression(Token **rest, Token *token);
 static Node *expression_statement(Token **rest, Token *tok);
+static Node *expression(Token **rest, Token *token);
 static Node *assign(Token **rest, Token *tok);
 static Node *equality(Token **rest, Token *tok);
 static Node *relational(Token **rest, Token *tok);
@@ -14,10 +14,11 @@ static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *token);
 
 // Node utility functions
-static Node *new_node(NodeKind kind)
+static Node *new_node(NodeKind kind, Token *token)
 {
     Node *node = calloc(1, sizeof(Node));
     node->kind = kind;
+    node->token = token;
     return node;
 }
 
@@ -29,31 +30,31 @@ static Bindable *find_variable(Token *token)
     return NULL;
 }
 
-static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs)
+static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *token)
 {
-    Node *node = new_node(kind);
+    Node *node = new_node(kind, token);
     node->lhs = lhs;
     node->rhs = rhs;
     return node;
 }
 
-static Node *new_number(int value)
+static Node *new_number(int value, Token *token)
 {
-    Node *node = new_node(NODE_NUM);
+    Node *node = new_node(NODE_NUM, token);
     node->value = value;
     return node;
 }
 
-static Node *new_unary(NodeKind kind, Node *expr)
+static Node *new_unary(NodeKind kind, Node *expr, Token *token)
 {
-    Node *node = new_node(kind);
+    Node *node = new_node(kind, token);
     node->lhs = expr;
     return node;
 }
 
-static Node *new_var_node(Bindable *variable)
+static Node *new_var_node(Bindable *variable, Token *token)
 {
-    Node *node = new_node(NODE_VAR);
+    Node *node = new_node(NODE_VAR, token);
     node->var = variable;
     return node;
 }
@@ -73,25 +74,25 @@ static Node *get_comparison_node(Token **rest, Token *token, Node *node)
     {
         if (token_equal(token, "<"))
         {
-            node = new_binary(NODE_LT, node, add(&token, token->next));
+            node = new_binary(NODE_LT, node, add(&token, token->next), token);
             continue;
         }
 
         if (token_equal(token, "<="))
         {
-            node = new_binary(NODE_LE, node, add(&token, token->next));
+            node = new_binary(NODE_LE, node, add(&token, token->next), token);
             continue;
         }
 
         if (token_equal(token, ">"))
         {
-            node = new_binary(NODE_LT, add(&token, token->next), node);
+            node = new_binary(NODE_LT, add(&token, token->next), node, token);
             continue;
         }
 
         if (token_equal(token, ">="))
         {
-            node = new_binary(NODE_LE, add(&token, token->next), node);
+            node = new_binary(NODE_LE, add(&token, token->next), node, token);
             continue;
         }
 
@@ -103,85 +104,85 @@ static Node *get_comparison_node(Token **rest, Token *token, Node *node)
 // Main parsing logic
 // Parsing based of priority
 // Higher priority/precedence gets parsed frist
-static Node *statment(Token **rest, Token *tok)
+static Node *statment(Token **rest, Token *token)
 {
-    if (token_equal(tok, "return"))
+    if (token_equal(token, "return"))
     {
-        Node *node = new_unary(NODE_RETURN, expression(&tok, tok->next));
-        *rest = skip(tok, ";");
+        Node *node = new_unary(NODE_RETURN, expression(&token, token->next), token);
+        *rest = skip(token, ";");
         return node;
     }
 
-    if (token_equal(tok, "if"))
+    if (token_equal(token, "if"))
     {
-        Node *node = new_node(NODE_IF);
-        tok = skip(tok->next, "(");
-        node->cond = expression(&tok, tok);
-        tok = skip(tok, ")");
-        node->then = statment(&tok, tok);
-        if (token_equal(tok, "else"))
-            node->els = statment(&tok, tok->next);
-        *rest = tok;
+        Node *node = new_node(NODE_IF, token);
+        token = skip(token->next, "(");
+        node->cond = expression(&token, token);
+        token = skip(token, ")");
+        node->then = statment(&token, token);
+        if (token_equal(token, "else"))
+            node->els = statment(&token, token->next);
+        *rest = token;
         return node;
     }
 
-    if (token_equal(tok, "for"))
+    if (token_equal(token, "for"))
     {
-        Node *node = new_node(NODE_FOR);
-        tok = skip(tok->next, "(");
+        Node *node = new_node(NODE_FOR, token);
+        token = skip(token->next, "(");
 
-        node->init = expression_statement(&tok, tok);
+        node->init = expression_statement(&token, token);
 
-        if (!token_equal(tok, ";"))
-            node->cond = expression(&tok, tok);
-        tok = skip(tok, ";");
+        if (!token_equal(token, ";"))
+            node->cond = expression(&token, token);
+        token = skip(token, ";");
 
-        if (!token_equal(tok, ")"))
-            node->increment = expression(&tok, tok);
-        tok = skip(tok, ")");
+        if (!token_equal(token, ")"))
+            node->increment = expression(&token, token);
+        token = skip(token, ")");
 
-        node->then = statment(rest, tok);
+        node->then = statment(rest, token);
         return node;
     }
-    if (token_equal(tok, "while"))
+    if (token_equal(token, "while"))
     {
-        Node *node = new_node(NODE_FOR);
-        tok = skip(tok->next, "(");
-        node->cond = expression(&tok, tok);
-        tok = skip(tok, ")");
-        node->then = statment(rest, tok);
+        Node *node = new_node(NODE_FOR, token);
+        token = skip(token->next, "(");
+        node->cond = expression(&token, token);
+        token = skip(token, ")");
+        node->then = statment(rest, token);
         return node;
     }
 
-    if (token_equal(tok, "{"))
-        return compound_statement(rest, tok->next);
+    if (token_equal(token, "{"))
+        return compound_statement(rest, token->next);
 
-    return expression_statement(rest, tok);
+    return expression_statement(rest, token);
 }
 
-static Node *compound_statement(Token **rest, Token *tok)
+static Node *compound_statement(Token **rest, Token *token)
 {
     Node head = {};
     Node *cur = &head;
-    while (!token_equal(tok, "}"))
-        cur = cur->next = statment(&tok, tok);
+    while (!token_equal(token, "}"))
+        cur = cur->next = statment(&token, token);
 
-    Node *node = new_node(NODE_BLOCK);
+    Node *node = new_node(NODE_BLOCK, token);
     node->body = head.next;
-    *rest = tok->next;
+    *rest = token->next;
     return node;
 }
 
-static Node *expression_statement(Token **rest, Token *tok)
+static Node *expression_statement(Token **rest, Token *token)
 {
-    if (token_equal(tok, ";"))
+    if (token_equal(token, ";"))
     {
-        *rest = tok->next;
-        return new_node(NODE_BLOCK);
+        *rest = token->next;
+        return new_node(NODE_BLOCK, token);
     }
 
-    Node *node = new_unary(NODE_EXPR_STMT, expression(&tok, tok));
-    *rest = skip(tok, ";");
+    Node *node = new_unary(NODE_EXPR_STMT, expression(&token, token), token);
+    *rest = skip(token, ";");
     return node;
 }
 
@@ -190,12 +191,12 @@ static Node *expression(Token **rest, Token *token)
     return assign(rest, token);
 }
 
-static Node *assign(Token **rest, Token *tok)
+static Node *assign(Token **rest, Token *token)
 {
-    Node *node = equality(&tok, tok);
-    if (token_equal(tok, "="))
-        node = new_binary(NODE_ASSIGN, node, assign(&tok, tok->next));
-    *rest = tok;
+    Node *node = equality(&token, token);
+    if (token_equal(token, "="))
+        node = new_binary(NODE_ASSIGN, node, assign(&token, token->next), token);
+    *rest = token;
     return node;
 }
 
@@ -206,7 +207,7 @@ static Node *equality(Token **rest, Token *token)
     while (token_equal(token, "==") || token_equal(token, "!="))
     {
         NodeKind kind = token_equal(token, "==") ? NODE_EQ : NODE_NE;
-        node = new_binary(kind, node, relational(&token, token->next));
+        node = new_binary(kind, node, relational(&token, token->next), token);
     }
 
     *rest = token;
@@ -227,7 +228,7 @@ static Node *add(Token **rest, Token *token)
     while (token_equal(token, "+") || token_equal(token, "-"))
     {
         NodeKind kind = token_equal(token, "+") ? NODE_ADD : NODE_SUB;
-        node = new_binary(kind, node, multiply(&token, token->next));
+        node = new_binary(kind, node, multiply(&token, token->next), token);
     }
 
     *rest = token;
@@ -239,21 +240,21 @@ static Node *multiply(Token **rest, Token *token)
     while (token_equal(token, "*") || token_equal(token, "/"))
     {
         NodeKind kind = token_equal(token, "*") ? NODE_MUL : NODE_DIV;
-        node = new_binary(kind, node, unary(&token, token->next));
+        node = new_binary(kind, node, unary(&token, token->next), token);
     }
     *rest = token;
     return node;
 }
 
-static Node *unary(Token **rest, Token *tok)
+static Node *unary(Token **rest, Token *token)
 {
-    if (token_equal(tok, "+"))
-        return unary(rest, tok->next);
+    if (token_equal(token, "+"))
+        return unary(rest, token->next);
 
-    if (token_equal(tok, "-"))
-        return new_unary(NODE_NEG, unary(rest, tok->next));
+    if (token_equal(token, "-"))
+        return new_unary(NODE_NEG, unary(rest, token->next), token);
 
-    return primary(rest, tok);
+    return primary(rest, token);
 }
 
 static Node *primary(Token **rest, Token *token)
@@ -270,11 +271,11 @@ static Node *primary(Token **rest, Token *token)
         if (!var)
             var = new_lvar(strndup(token->location, token->length));
         *rest = token->next;
-        return new_var_node(var);
+        return new_var_node(var, token);
     }
     if (token->kind == TOK_NUM)
     {
-        Node *node = new_number(token->value);
+        Node *node = new_number(token->value, token);
         *rest = token->next;
         return node;
     }
