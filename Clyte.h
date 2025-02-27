@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct Type Type;
 typedef struct Node Node;
 
 // Tokenizer
@@ -68,6 +69,8 @@ typedef enum
     NODE_LT,
     NODE_LE,
     NODE_ASSIGN,
+    NODE_ADDR,
+    NODE_DEREF,
     NODE_RETURN,
     NODE_IF,
     NODE_FOR,
@@ -81,6 +84,7 @@ struct Node
 {
     NodeKind kind;
     Node *next;
+    Type *type;
     Token *token;
     Node *lhs;
     Node *rhs;
@@ -103,3 +107,20 @@ Function *parse(Token *token);
 // Code generation
 
 void codegen(Function *prog);
+
+typedef enum
+{
+    TY_INT,
+    TY_PTR,
+} TypeKind;
+
+struct Type
+{
+    TypeKind kind;
+    Type *base;
+};
+
+extern Type *ty_int;
+
+bool is_integer(Type *ty);
+void add_node_type(Node *node);

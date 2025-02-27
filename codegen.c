@@ -2,6 +2,8 @@
 
 static int depth;
 
+static void generate_expression(Node *node);
+
 // Stack utility functions
 static void push(void)
 {
@@ -45,6 +47,11 @@ static void generate_address(Node *node)
         return;
     }
 
+    if (node->kind == NODE_DEREF)
+    {
+        generate_expression(node->lhs);
+        return;
+    }
     error_at(node->token->location, "not an lvalue");
 }
 
@@ -66,6 +73,13 @@ void generate_expression(Node *node)
     case NODE_VAR:
         generate_address(node);
         printf("  mov (%%rax), %%rax\n");
+        return;
+    case NODE_DEREF:
+        generate_expression(node->lhs);
+        printf("  mov (%%rax), %%rax\n");
+        return;
+    case NODE_ADDR:
+        generate_address(node->lhs);
         return;
     case NODE_ASSIGN:
         generate_address(node->lhs);

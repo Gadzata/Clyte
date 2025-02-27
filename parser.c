@@ -2,13 +2,14 @@
 
 Bindable *locals;
 
-static Node *compound_statement(Token **rest, Token *tok);
-static Node *expression_statement(Token **rest, Token *tok);
+static Node *compound_statement(Token **rest, Token *token);
+static Node *statment(Token **rest, Token *token);
+static Node *expression_statement(Token **rest, Token *token);
 static Node *expression(Token **rest, Token *token);
-static Node *assign(Token **rest, Token *tok);
-static Node *equality(Token **rest, Token *tok);
-static Node *relational(Token **rest, Token *tok);
-static Node *add(Token **rest, Token *tok);
+static Node *assign(Token **rest, Token *token);
+static Node *equality(Token **rest, Token *token);
+static Node *relational(Token **rest, Token *token);
+static Node *add(Token **rest, Token *token);
 static Node *multiply(Token **rest, Token *token);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *token);
@@ -165,7 +166,10 @@ static Node *compound_statement(Token **rest, Token *token)
     Node head = {};
     Node *cur = &head;
     while (!token_equal(token, "}"))
+    {
         cur = cur->next = statment(&token, token);
+        add_node_type(cur);
+    }
 
     Node *node = new_node(NODE_BLOCK, token);
     node->body = head.next;
@@ -221,14 +225,63 @@ static Node *relational(Token **rest, Token *token)
     return get_comparison_node(rest, token, node);
 }
 
+static Node *new_add(Node *lhs, Node *rhs, Token *token)
+{
+    add_node_type(lhs);
+    add_node_type(rhs);
+
+    if (is_integer(lhs->type) && is_integer(rhs->type))
+        return new_binary(NODE_ADD, lhs, rhs, token);
+
+    if (lhs->type->base && rhs->type->base)
+        error_at(token->location, "invalid operands");
+
+    if (!lhs->type->base && rhs->type->base)
+    {
+        Node *tmp = lhs;
+        lhs = rhs;
+        rhs = tmp;
+    }
+
+    rhs = new_binary(NODE_MUL, rhs, new_number(8, token), token);
+    return new_binary(NODE_ADD, lhs, rhs, token);
+}
+
+static Node *new_sub(Node *lhs, Node *rhs, Token *token)
+{
+    add_node_type(lhs);
+    add_node_type(rhs);
+
+    if (is_integer(lhs->type) && is_integer(rhs->type))
+        return new_binary(NODE_SUB, lhs, rhs, token);
+
+    if (lhs->type->base && is_integer(rhs->type))
+    {
+        rhs = new_binary(NODE_MUL, rhs, new_number(8, token), token);
+        add_node_type(rhs);
+        Node *node = new_binary(NODE_SUB, lhs, rhs, token);
+        node->type = lhs->type;
+        return node;
+    }
+
+    // ptr - ptr, which returns how many elements are between the two.
+    if (lhs->type->base && rhs->type->base)
+    {
+        Node *node = new_binary(NODE_SUB, lhs, rhs, token);
+        node->type = ty_int;
+        return new_binary(NODE_DIV, node, new_number(8, token), token);
+    }
+
+    error_at(token->location, "invalid operands");
+}
+
 static Node *add(Token **rest, Token *token)
 {
     Node *node = multiply(&token, token);
 
     while (token_equal(token, "+") || token_equal(token, "-"))
     {
-        NodeKind kind = token_equal(token, "+") ? NODE_ADD : NODE_SUB;
-        node = new_binary(kind, node, multiply(&token, token->next), token);
+        node = token_equal(token, "+") ? new_add(node, multiply(&token, token->next), token) : new_sub(node, multiply(&token, token->next), token);
     }
 
     *rest = token;
@@ -253,6 +306,12 @@ static Node *unary(Token **rest, Token *token)
 
     if (token_equal(token, "-"))
         return new_unary(NODE_NEG, unary(rest, token->next), token);
+
+    if (token_equal(token, "&"))
+        return new_unary(NODE_ADDR, unary(rest, token->next), token);
+
+    if (token_equal(token, "*"))
+        return new_unary(NODE_DEREF, unary(rest, token->next), token);
 
     return primary(rest, token);
 }
