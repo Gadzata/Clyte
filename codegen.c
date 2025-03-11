@@ -1,6 +1,8 @@
 #include "Clyte.h"
 
 static int depth;
+static char *arguments_registers[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+static Function *current_function;
 
 static void generate_expression(Node *node);
 
@@ -28,15 +30,18 @@ static int align_to(int n, int align)
     return (n + align - 1) / align * align;
 }
 
-static void assign_local_var_offsets(Function *prog)
+static void assign_local_var_offsets(Function *program)
 {
-    int offset = 0;
-    for (Bindable *var = prog->locals; var; var = var->next)
+    for (Function *funct = program; funct; funct = funct->next)
     {
-        offset += 8;
-        var->offset = -offset;
+        int offset = 0;
+        for (Bindable *var = funct->locals; var; var = var->next)
+        {
+            offset += 8;
+            var->offset = -offset;
+        }
+        funct->stack_size = align_to(offset, 16);
     }
-    prog->stack_size = align_to(offset, 16);
 }
 
 static void generate_address(Node *node)
@@ -88,6 +93,23 @@ void generate_expression(Node *node)
         pop("%rdi");
         printf("  mov %%rax, (%%rdi)\n");
         return;
+    case NODE_FUNCTION_CALL:
+    {
+        int nargs = 0;
+        for (Node *arg = node->arguments_list; arg; arg = arg->next)
+        {
+            generate_expression(arg);
+            push();
+            nargs++;
+        }
+
+        for (int i = nargs - 1; i >= 0; i--)
+            pop(arguments_registers[i]);
+
+        printf("  mov $0, %%rax\n");
+        printf("  call %s\n", node->function_name);
+        return;
+    }
     }
 
     generate_expression(node->rhs);
@@ -128,12 +150,12 @@ void generate_expression(Node *node)
     error_at(node->token->location, "invalid expression");
 }
 
-static void generate_statment(Node *node)
+static void generate_statement(Node *node)
 {
     if (node->kind == NODE_BLOCK)
     {
         for (Node *n = node->body; n; n = n->next)
-            generate_statment(n);
+            generate_statement(n);
         return;
     }
     if (node->kind == NODE_IF)
@@ -142,11 +164,11 @@ static void generate_statment(Node *node)
         generate_expression(node->cond);
         printf("  cmp $0, %%rax\n");
         printf("  je  .L.else.%d\n", c);
-        generate_statment(node->then);
+        generate_statement(node->then);
         printf("  jmp .L.end.%d\n", c);
         printf(".L.else.%d:\n", c);
         if (node->els)
-            generate_statment(node->els);
+            generate_statement(node->els);
         printf(".L.end.%d:\n", c);
         return;
     }
@@ -154,7 +176,7 @@ static void generate_statment(Node *node)
     {
         int c = count();
         if (node->init)
-            generate_statment(node->init);
+            generate_statement(node->init);
         printf(".L.begin.%d:\n", c);
         if (node->cond)
         {
@@ -162,7 +184,7 @@ static void generate_statment(Node *node)
             printf("  cmp $0, %%rax\n");
             printf("  je  .L.end.%d\n", c);
         }
-        generate_statment(node->then);
+        generate_statement(node->then);
         if (node->increment)
             generate_expression(node->increment);
         printf("  jmp .L.begin.%d\n", c);
@@ -174,7 +196,7 @@ static void generate_statment(Node *node)
         generate_expression(node->lhs);
         if (node->kind == NODE_RETURN)
         {
-            printf("  jmp .L.return\n");
+            printf("  jmp .L.return.%s\n", current_function->name);
         }
         return;
     }
@@ -182,26 +204,31 @@ static void generate_statment(Node *node)
     error_at(node->token->location, "invalid statement");
 }
 
-static void starting_code(Function *prog)
+void code_generation(Function *function)
 {
-    printf("  .globl main\n");
-    printf("main:\n");
+    printf("  .globl %s\n", function->name);
+    printf("%s:\n", function->name);
+    current_function = function;
+
     printf("  push %%rbp\n");
     printf("  mov %%rsp, %%rbp\n");
-    printf("  sub $%d, %%rsp\n", prog->stack_size);
+    printf("  sub $%d, %%rsp\n", function->stack_size);
+
+    generate_statement(function->body);
+    assert(depth == 0);
+
+    printf(".L.return.%s:\n", function->name);
+    printf("  mov %%rbp, %%rsp\n");
+    printf("  pop %%rbp\n");
+    printf("  ret\n");
 }
 
 void codegen(Function *prog)
 {
     assign_local_var_offsets(prog);
 
-    starting_code(prog);
-
-    generate_statment(prog->body);
-    assert(depth == 0);
-
-    printf(".L.return:\n");
-    printf("  mov %%rbp, %%rsp\n");
-    printf("  pop %%rbp\n");
-    printf("  ret\n");
+    for (Function *function = prog; function; function = function->next)
+    {
+        code_generation(function);
+    }
 }

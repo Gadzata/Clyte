@@ -35,6 +35,7 @@ void error(const char *fmt, ...);
 void error_at(char *location, const char *fmt, ...);
 bool token_equal(Token *token, char *op);
 Token *skip(Token *token, char *s);
+bool consume_token(Token **rest, Token *tok, char *str);
 Token *tokenize(char *input);
 
 // Local Variable Object
@@ -43,6 +44,7 @@ struct Bindable
 {
     Bindable *next;
     char *var_name;
+    Type *type;
     int offset;
 };
 
@@ -50,7 +52,10 @@ struct Bindable
 typedef struct Function Function;
 struct Function
 {
+    Function *next;
+    char *name;
     Node *body;
+    Bindable *parameters;
     Bindable *locals;
     int stack_size;
 };
@@ -75,6 +80,7 @@ typedef enum
     NODE_IF,
     NODE_FOR,
     NODE_BLOCK,
+    NODE_FUNCTION_CALL,
     NODE_EXPR_STMT,
     NODE_VAR,
     NODE_NUM,
@@ -90,6 +96,9 @@ struct Node
     Node *rhs;
 
     Node *body;
+
+    char *function_name;
+    Node *arguments_list;
 
     Node *cond;
     Node *then;
@@ -110,17 +119,25 @@ void codegen(Function *prog);
 
 typedef enum
 {
-    TY_INT,
-    TY_PTR,
+    TYPE_INT,
+    TYPE_PTR,
+    TYPE_FUNC,
 } TypeKind;
 
 struct Type
 {
     TypeKind kind;
     Type *base;
+    Token *name;
+    Type *return_type;
+    Type *parameters;
+    Type *next;
 };
 
 extern Type *ty_int;
 
 bool is_integer(Type *ty);
+Type *copy_type(Type *ty);
+Type *pointer_to(Type *base);
+Type *function_type(Type *return_type);
 void add_node_type(Node *node);

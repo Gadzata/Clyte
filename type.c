@@ -1,18 +1,33 @@
 #include "Clyte.h"
 
-Type *ty_int = &(Type){TY_INT};
+Type *ty_int = &(Type){TYPE_INT};
 
 bool is_integer(Type *type)
 {
-    return type->kind == TY_INT;
+    return type->kind == TYPE_INT;
 }
 
 Type *pointer_to(Type *base)
 {
     Type *type = calloc(1, sizeof(Type));
-    type->kind = TY_PTR;
+    type->kind = TYPE_PTR;
     type->base = base;
     return type;
+}
+
+Type *function_type(Type *return_type)
+{
+    Type *ty = calloc(1, sizeof(Type));
+    ty->kind = TYPE_FUNC;
+    ty->return_type = return_type;
+    return ty;
+}
+
+Type *copy_type(Type *ty)
+{
+    Type *ret = calloc(1, sizeof(Type));
+    *ret = *ty;
+    return ret;
 }
 
 void add_node_type(Node *node)
@@ -31,6 +46,9 @@ void add_node_type(Node *node)
     for (Node *n = node->body; n; n = n->next)
         add_node_type(n);
 
+    for (Node *n = node->arguments_list; n; n = n->next)
+        add_node_type(n);
+
     switch (node->kind)
     {
     case NODE_ADD:
@@ -45,18 +63,20 @@ void add_node_type(Node *node)
     case NODE_NE:
     case NODE_LT:
     case NODE_LE:
-    case NODE_VAR:
     case NODE_NUM:
+    case NODE_FUNCTION_CALL:
         node->type = ty_int;
+        return;
+    case NODE_VAR:
+        node->type = node->var->type;
         return;
     case NODE_ADDR:
         node->type = pointer_to(node->lhs->type);
         return;
     case NODE_DEREF:
-        if (node->lhs->type->kind == TY_PTR)
-            node->type = node->lhs->type->base;
-        else
-            node->type = ty_int;
+        if (node->lhs->type->kind != TYPE_PTR)
+            error_at(node->token->location, "invalid pointer dereference");
+        node->type = node->lhs->type->base;
         return;
     }
 }

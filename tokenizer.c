@@ -100,9 +100,20 @@ static bool is_valid_non_first_identifier(char identChar)
     return is_valid_first_identifier(identChar) || (character_between_values(identChar, '0', '9'));
 }
 
+bool consume_token(Token **rest, Token *token, char *str)
+{
+    if (token_equal(token, str))
+    {
+        *rest = token->next;
+        return true;
+    }
+    *rest = token;
+    return false;
+}
+
 static bool is_keyword(Token *tok)
 {
-    static char *kw[] = {"return", "if", "else", "for", "while"};
+    static char *kw[] = {"return", "if", "else", "for", "while", "int"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
         if (token_equal(tok, kw[i]))

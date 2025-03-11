@@ -2,8 +2,11 @@
 
 Bindable *locals;
 
+static Type *declare_type(Token **rest, Token *token);
+static Type *declarator(Token **rest, Token *token, Type *type);
+static Node *declaration(Token **rest, Token *token);
 static Node *compound_statement(Token **rest, Token *token);
-static Node *statment(Token **rest, Token *token);
+static Node *statement(Token **rest, Token *token);
 static Node *expression_statement(Token **rest, Token *token);
 static Node *expression(Token **rest, Token *token);
 static Node *assign(Token **rest, Token *token);
@@ -60,11 +63,12 @@ static Node *new_var_node(Bindable *variable, Token *token)
     return node;
 }
 
-static Bindable *new_lvar(char *name)
+static Bindable *new_local_var(char *name, Type *type)
 {
     Bindable *var = calloc(1, sizeof(Bindable));
     var->var_name = name;
     var->next = locals;
+    var->type = type;
     locals = var;
     return var;
 }
@@ -102,10 +106,104 @@ static Node *get_comparison_node(Token **rest, Token *token, Node *node)
     }
 }
 
+static Type *type_suffix(Token **rest, Token *token, Type *type)
+{
+    if (token_equal(token, "("))
+    {
+        token = token->next;
+
+        Type head = {};
+        Type *cur = &head;
+
+        while (!token_equal(token, ")"))
+        {
+            if (cur != &head)
+                token = skip(token, ",");
+            Type *basety = declare_type(&token, token);
+            Type *ty = declarator(&token, token, basety);
+            cur = cur->next = copy_type(ty);
+        }
+
+        type = function_type(type);
+        type->parameters = head.next;
+        *rest = token->next;
+        return type;
+    }
+    *rest = token;
+    return type;
+}
+
+static char *get_identation(Token *token)
+{
+    if (token->kind != TOK_IDENT)
+        error_at(token->location, "expected an identifier");
+    return strndup(token->location, token->length);
+}
+
+static Type *declare_type(Token **rest, Token *token)
+{
+    *rest = skip(token, "int");
+    return ty_int;
+}
+
+// declarator = "*"* ident
+static Type *declarator(Token **rest, Token *token, Type *type)
+{
+    while (consume_token(&token, token, "*"))
+        type = pointer_to(type);
+
+    if (token->kind != TOK_IDENT)
+        error_at(token->location, "expected a variable name");
+
+    type = type_suffix(rest, token->next, type);
+    type->name = token;
+    return type;
+}
+
+static Node *declaration(Token **rest, Token *token)
+{
+    Type *basety = declare_type(&token, token);
+
+    Node head = {};
+    Node *cur = &head;
+    int i = 0;
+
+    while (!token_equal(token, ";"))
+    {
+        if (i++ > 0)
+            token = skip(token, ",");
+
+        Type *type = declarator(&token, token, basety);
+        Bindable *var = new_local_var(get_identation(type->name), type);
+
+        if (!token_equal(token, "="))
+            continue;
+
+        Node *lhs = new_var_node(var, type->name);
+        Node *rhs = assign(&token, token->next);
+        Node *node = new_binary(NODE_ASSIGN, lhs, rhs, token);
+        cur = cur->next = new_unary(NODE_EXPR_STMT, node, token);
+    }
+
+    Node *node = new_node(NODE_BLOCK, token);
+    node->body = head.next;
+    *rest = token->next;
+    return node;
+}
+
+static void create_param_local_vars(Type *param)
+{
+    if (param)
+    {
+        create_param_local_vars(param->next);
+        new_local_var(get_identation(param->name), param);
+    }
+}
+
 // Main parsing logic
 // Parsing based of priority
 // Higher priority/precedence gets parsed frist
-static Node *statment(Token **rest, Token *token)
+static Node *statement(Token **rest, Token *token)
 {
     if (token_equal(token, "return"))
     {
@@ -120,9 +218,9 @@ static Node *statment(Token **rest, Token *token)
         token = skip(token->next, "(");
         node->cond = expression(&token, token);
         token = skip(token, ")");
-        node->then = statment(&token, token);
+        node->then = statement(&token, token);
         if (token_equal(token, "else"))
-            node->els = statment(&token, token->next);
+            node->els = statement(&token, token->next);
         *rest = token;
         return node;
     }
@@ -142,7 +240,7 @@ static Node *statment(Token **rest, Token *token)
             node->increment = expression(&token, token);
         token = skip(token, ")");
 
-        node->then = statment(rest, token);
+        node->then = statement(rest, token);
         return node;
     }
     if (token_equal(token, "while"))
@@ -151,7 +249,7 @@ static Node *statment(Token **rest, Token *token)
         token = skip(token->next, "(");
         node->cond = expression(&token, token);
         token = skip(token, ")");
-        node->then = statment(rest, token);
+        node->then = statement(rest, token);
         return node;
     }
 
@@ -167,7 +265,10 @@ static Node *compound_statement(Token **rest, Token *token)
     Node *cur = &head;
     while (!token_equal(token, "}"))
     {
-        cur = cur->next = statment(&token, token);
+        if (token_equal(token, "int"))
+            cur = cur->next = declaration(&token, token);
+        else
+            cur = cur->next = statement(&token, token);
         add_node_type(cur);
     }
 
@@ -316,6 +417,29 @@ static Node *unary(Token **rest, Token *token)
     return primary(rest, token);
 }
 
+static Node *function_call(Token **rest, Token *token)
+{
+    Token *start = token;
+    token = token->next->next;
+
+    Node head = {};
+    Node *cur = &head;
+
+    while (!token_equal(token, ")"))
+    {
+        if (cur != &head)
+            token = skip(token, ",");
+        cur = cur->next = assign(&token, token);
+    }
+
+    *rest = skip(token, ")");
+
+    Node *node = new_node(NODE_FUNCTION_CALL, start);
+    node->function_name = strndup(start->location, start->length);
+    node->arguments_list = head.next;
+    return node;
+}
+
 static Node *primary(Token **rest, Token *token)
 {
     if (token_equal(token, "("))
@@ -326,9 +450,12 @@ static Node *primary(Token **rest, Token *token)
     }
     if (token->kind == TOK_IDENT)
     {
+        if (token_equal(token->next, "("))
+            return function_call(rest, token);
+
         Bindable *var = find_variable(token);
         if (!var)
-            var = new_lvar(strndup(token->location, token->length));
+            error_at(token->location, "undefined variable");
         *rest = token->next;
         return new_var_node(var, token);
     }
@@ -341,12 +468,31 @@ static Node *primary(Token **rest, Token *token)
     error_at(token->location, "expected an expression");
 }
 
+static Function *function(Token **rest, Token *token)
+{
+    Type *type = declare_type(&token, token);
+    type = declarator(&token, token, type);
+
+    locals = NULL;
+
+    Function *function = calloc(1, sizeof(Function));
+    function->name = get_identation(type->name);
+    create_param_local_vars(type->parameters);
+    function->parameters = locals;
+
+    token = skip(token, "{");
+    function->body = compound_statement(rest, token);
+    function->locals = locals;
+    return function;
+}
+
+// program = function-definition*
 Function *parse(Token *token)
 {
-    token = skip(token, "{");
+    Function head = {};
+    Function *cur = &head;
 
-    Function *prog = calloc(1, sizeof(Function));
-    prog->body = compound_statement(&token, token);
-    prog->locals = locals;
-    return prog;
+    while (token->kind != TOK_EOF)
+        cur = cur->next = function(&token, token);
+    return head.next;
 }
