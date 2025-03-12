@@ -14,6 +14,7 @@ static Node *equality(Token **rest, Token *token);
 static Node *relational(Token **rest, Token *token);
 static Node *add(Token **rest, Token *token);
 static Node *multiply(Token **rest, Token *token);
+static Node *postfix(Token **rest, Token *tok);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *token);
 
@@ -106,29 +107,46 @@ static Node *get_comparison_node(Token **rest, Token *token, Node *node)
     }
 }
 
+static int get_number(Token *token)
+{
+    if (token->kind != TOK_NUM)
+        error_at(token->location, "expected a number");
+    return token->value;
+}
+
+static Type *function_params(Token **rest, Token *token, Type *type)
+{
+    Type head = {};
+    Type *cur = &head;
+
+    while (!token_equal(token, ")"))
+    {
+        if (cur != &head)
+            token = skip(token, ",");
+        Type *basety = declare_type(&token, token);
+        Type *ty = declarator(&token, token, basety);
+        cur = cur->next = copy_type(ty);
+    }
+
+    type = function_type(type);
+    type->parameters = head.next;
+    *rest = token->next;
+    return type;
+}
+
 static Type *type_suffix(Token **rest, Token *token, Type *type)
 {
     if (token_equal(token, "("))
+        return function_params(rest, token->next, type);
+
+    if (token_equal(token, "["))
     {
-        token = token->next;
-
-        Type head = {};
-        Type *cur = &head;
-
-        while (!token_equal(token, ")"))
-        {
-            if (cur != &head)
-                token = skip(token, ",");
-            Type *basety = declare_type(&token, token);
-            Type *ty = declarator(&token, token, basety);
-            cur = cur->next = copy_type(ty);
-        }
-
-        type = function_type(type);
-        type->parameters = head.next;
-        *rest = token->next;
-        return type;
+        int token_value = get_number(token->next);
+        token = skip(token->next->next, "]");
+        type = type_suffix(rest, token, type);
+        return array_of(type, token_value);
     }
+
     *rest = token;
     return type;
 }
@@ -344,7 +362,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *token)
         rhs = tmp;
     }
 
-    rhs = new_binary(NODE_MUL, rhs, new_number(8, token), token);
+    rhs = new_binary(NODE_MUL, rhs, new_number(lhs->type->base->size, token), token);
     return new_binary(NODE_ADD, lhs, rhs, token);
 }
 
@@ -358,7 +376,7 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *token)
 
     if (lhs->type->base && is_integer(rhs->type))
     {
-        rhs = new_binary(NODE_MUL, rhs, new_number(8, token), token);
+        rhs = new_binary(NODE_MUL, rhs, new_number(lhs->type->base->size, token), token);
         add_node_type(rhs);
         Node *node = new_binary(NODE_SUB, lhs, rhs, token);
         node->type = lhs->type;
@@ -370,7 +388,7 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *token)
     {
         Node *node = new_binary(NODE_SUB, lhs, rhs, token);
         node->type = ty_int;
-        return new_binary(NODE_DIV, node, new_number(8, token), token);
+        return new_binary(NODE_DIV, node, new_number(lhs->type->base->size, token), token);
     }
 
     error_at(token->location, "invalid operands");
@@ -414,7 +432,22 @@ static Node *unary(Token **rest, Token *token)
     if (token_equal(token, "*"))
         return new_unary(NODE_DEREF, unary(rest, token->next), token);
 
-    return primary(rest, token);
+    return postfix(rest, token);
+}
+
+static Node *postfix(Token **rest, Token *token)
+{
+    Node *node = primary(&token, token);
+
+    while (token_equal(token, "["))
+    {
+        Token *start = token;
+        Node *index = expression(&token, token->next);
+        token = skip(token, "]");
+        node = new_unary(NODE_DEREF, new_add(node, index, start), start);
+    }
+    *rest = token;
+    return node;
 }
 
 static Node *function_call(Token **rest, Token *token)

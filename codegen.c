@@ -37,7 +37,7 @@ static void assign_local_var_offsets(Function *program)
         int offset = 0;
         for (Bindable *var = funct->locals; var; var = var->next)
         {
-            offset += 8;
+            offset += var->type->size;
             var->offset = -offset;
         }
         funct->stack_size = align_to(offset, 16);
@@ -60,6 +60,22 @@ static void generate_address(Node *node)
     error_at(node->token->location, "not an lvalue");
 }
 
+static void load(Type *type)
+{
+    if (type->kind == TYPE_ARRAY)
+    {
+        return;
+    }
+
+    printf("  mov (%%rax), %%rax\n");
+}
+
+static void store(void)
+{
+    pop("%rdi");
+    printf("  mov %%rax, (%%rdi)\n");
+}
+
 // Main assembly code generation from Nodes
 void generate_expression(Node *node)
 {
@@ -77,11 +93,11 @@ void generate_expression(Node *node)
         return;
     case NODE_VAR:
         generate_address(node);
-        printf("  mov (%%rax), %%rax\n");
+        load(node->type);
         return;
     case NODE_DEREF:
         generate_expression(node->lhs);
-        printf("  mov (%%rax), %%rax\n");
+        load(node->type);
         return;
     case NODE_ADDR:
         generate_address(node->lhs);
@@ -90,8 +106,7 @@ void generate_expression(Node *node)
         generate_address(node->lhs);
         push();
         generate_expression(node->rhs);
-        pop("%rdi");
-        printf("  mov %%rax, (%%rdi)\n");
+        store();
         return;
     case NODE_FUNCTION_CALL:
     {
@@ -213,6 +228,10 @@ void code_generation(Function *function)
     printf("  push %%rbp\n");
     printf("  mov %%rsp, %%rbp\n");
     printf("  sub $%d, %%rsp\n", function->stack_size);
+
+    int i = 0;
+    for (Bindable *var = function->parameters; var; var = var->next)
+        printf("  mov %s, %d(%%rbp)\n", arguments_registers[i++], var->offset);
 
     generate_statement(function->body);
     assert(depth == 0);

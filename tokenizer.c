@@ -36,12 +36,12 @@ Token *skip(Token *token, char *s)
     return token->next;
 }
 
-static int get_number(Token *token)
-{
-    if (token->kind != TOK_NUM)
-        error_at(token->location, "expected a number");
-    return token->value;
-}
+// static int get_number(Token *token)
+// {
+//     if (token->kind != TOK_NUM)
+//         error_at(token->location, "expected a number");
+//     return token->value;
+// }
 
 static bool check_is_letter(char *curInput)
 {

@@ -122,22 +122,26 @@ typedef enum
     TYPE_INT,
     TYPE_PTR,
     TYPE_FUNC,
+    TYPE_ARRAY,
 } TypeKind;
 
 struct Type
 {
     TypeKind kind;
+    int size;
     Type *base;
     Token *name;
     Type *return_type;
     Type *parameters;
     Type *next;
+    int array_len;
 };
 
 extern Type *ty_int;
 
-bool is_integer(Type *ty);
-Type *copy_type(Type *ty);
+bool is_integer(Type *type);
+Type *copy_type(Type *type);
 Type *pointer_to(Type *base);
 Type *function_type(Type *return_type);
+Type *array_of(Type *base, int size);
 void add_node_type(Node *node);
