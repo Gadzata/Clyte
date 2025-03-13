@@ -175,9 +175,7 @@ static Type *type_suffix(Token **rest, Token *token, Type *type)
 static char *new_unique_name(void)
 {
     static int id = 0;
-    char *buffer = calloc(1, 20);
-    sprintf(buffer, ".L..%d", id++);
-    return buffer;
+    return format(".L..%d", id++);
 }
 
 static Bindable *new_anon_global_var(Type *type)

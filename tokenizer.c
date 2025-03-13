@@ -2,6 +2,12 @@
 
 static char *curInput;
 
+static const struct
+{
+    char key;
+    char value;
+} escape_map[] = {{'a', '\a'}, {'b', '\b'}, {'t', '\t'}, {'n', '\n'}, {'v', '\v'}, {'f', '\f'}, {'r', '\r'}, {'e', 27}};
+
 // Error handling functions
 void error(const char *fmt, ...)
 {
@@ -139,17 +145,53 @@ static int read_punct(char *curInput)
     return ispunct(*curInput) ? 1 : 0;
 }
 
+static int read_escaped_char(char *curInput)
+{
+    for (size_t i = 0; i < sizeof(escape_map) / sizeof(escape_map[0]); i++)
+    {
+        if (*curInput == escape_map[i].key)
+            return escape_map[i].value;
+    }
+
+    return *curInput;
+}
+
+static char *string_literal_end(char *curInput)
+{
+    char *start = curInput;
+    for (; *curInput != '"'; curInput++)
+    {
+        if (*curInput == '\n' || *curInput == '\0')
+            error_at(start, "unclosed string literal");
+        if (*curInput == '\\')
+            curInput++;
+    }
+    return curInput;
+}
+
 static Token *read_string_literal(char *start)
 {
-    char *string_var = start + 1;
-    for (; *string_var != '"'; string_var++)
-        if (*string_var == '\n' || *string_var == '\0')
-            error_at(start, "unclosed string literal");
+    char *end = string_literal_end(start + 1);
+    char *buffuer = calloc(1, end - start);
+    int len = 0;
 
-    Token *token = new_token(TOK_STR, start, string_var + 1);
-    token->type = array_of(ty_char, string_var - start);
-    token->str = strndup(start + 1, string_var - start - 1);
-    return token;
+    for (char *curInput = start + 1; curInput < end;)
+    {
+        if (*curInput == '\\')
+        {
+            buffuer[len++] = read_escaped_char(curInput + 1);
+            curInput += 2;
+        }
+        else
+        {
+            buffuer[len++] = *curInput++;
+        }
+    }
+
+    Token *tok = new_token(TOK_STR, start, end + 1);
+    tok->type = array_of(ty_char, len + 1);
+    tok->str = buffuer;
+    return tok;
 }
 
 static void convert_keywords(Token *token)

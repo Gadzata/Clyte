@@ -10,6 +10,8 @@
 typedef struct Type Type;
 typedef struct Node Node;
 
+char *format(char *fmt, ...);
+
 // Tokenizer
 
 typedef enum
