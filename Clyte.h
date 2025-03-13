@@ -17,6 +17,7 @@ typedef enum
     TOK_IDENT,
     TOK_PUNCT,
     TOK_KEYWORD,
+    TOK_STR,
     TOK_NUM,
     TOK_EOF,
 } TokenKind;
@@ -29,6 +30,8 @@ struct Token
     int value;
     char *location;
     int length;
+    Type *type;
+    char *str;
 };
 
 void error(const char *fmt, ...);
@@ -49,6 +52,8 @@ struct Bindable
     int offset;
 
     bool is_function;
+
+    char *init_data;
 
     Node *body;
     Bindable *parameters;
@@ -115,6 +120,7 @@ void codegen(Bindable *prog);
 
 typedef enum
 {
+    TYPE_CHAR,
     TYPE_INT,
     TYPE_PTR,
     TYPE_FUNC,
@@ -133,6 +139,7 @@ struct Type
     int array_len;
 };
 
+extern Type *ty_char;
 extern Type *ty_int;
 
 bool is_integer(Type *type);

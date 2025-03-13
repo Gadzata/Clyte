@@ -172,6 +172,26 @@ static Type *type_suffix(Token **rest, Token *token, Type *type)
     return type;
 }
 
+static char *new_unique_name(void)
+{
+    static int id = 0;
+    char *buffer = calloc(1, 20);
+    sprintf(buffer, ".L..%d", id++);
+    return buffer;
+}
+
+static Bindable *new_anon_global_var(Type *type)
+{
+    return new_global_var(new_unique_name(), type);
+}
+
+static Bindable *new_string_literal(char *curInput, Type *type)
+{
+    Bindable *var = new_anon_global_var(type);
+    var->init_data = curInput;
+    return var;
+}
+
 static char *get_identation(Token *token)
 {
     if (token->kind != TOK_IDENT)
@@ -181,6 +201,12 @@ static char *get_identation(Token *token)
 
 static Type *declare_type(Token **rest, Token *token)
 {
+    if (token_equal(token, "char"))
+    {
+        *rest = token->next;
+        return ty_char;
+    }
+
     *rest = skip(token, "int");
     return ty_int;
 }
@@ -228,6 +254,11 @@ static Node *declaration(Token **rest, Token *token)
     node->body = head.next;
     *rest = token->next;
     return node;
+}
+
+static bool is_typename(Token *token)
+{
+    return token_equal(token, "char") || token_equal(token, "int");
 }
 
 static void create_param_local_vars(Type *param)
@@ -304,7 +335,7 @@ static Node *compound_statement(Token **rest, Token *token)
     Node *cur = &head;
     while (!token_equal(token, "}"))
     {
-        if (token_equal(token, "int"))
+        if (is_typename(token))
             cur = cur->next = declaration(&token, token);
         else
             cur = cur->next = statement(&token, token);
@@ -516,6 +547,12 @@ static Node *primary(Token **rest, Token *token)
         Bindable *var = find_variable(token);
         if (!var)
             error_at(token->location, "undefined variable");
+        *rest = token->next;
+        return new_var_node(var, token);
+    }
+    if (token->kind == TOK_STR)
+    {
+        Bindable *var = new_string_literal(token->str, token->type);
         *rest = token->next;
         return new_var_node(var, token);
     }

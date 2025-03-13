@@ -1,10 +1,11 @@
 #include "Clyte.h"
 
+Type *ty_char = &(Type){TYPE_CHAR, 1};
 Type *ty_int = &(Type){TYPE_INT, 8};
 
 bool is_integer(Type *type)
 {
-    return type->kind == TYPE_INT;
+    return type->kind == TYPE_CHAR || type->kind == TYPE_INT;
 }
 
 Type *pointer_to(Type *base)

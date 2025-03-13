@@ -121,6 +121,7 @@ static bool is_keyword(Token *tok)
         "while",
         "int",
         "sizeof",
+        "char",
     };
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
@@ -136,6 +137,19 @@ static int read_punct(char *curInput)
         return 2;
 
     return ispunct(*curInput) ? 1 : 0;
+}
+
+static Token *read_string_literal(char *start)
+{
+    char *string_var = start + 1;
+    for (; *string_var != '"'; string_var++)
+        if (*string_var == '\n' || *string_var == '\0')
+            error_at(start, "unclosed string literal");
+
+    Token *token = new_token(TOK_STR, start, string_var + 1);
+    token->type = array_of(ty_char, string_var - start);
+    token->str = strndup(start + 1, string_var - start - 1);
+    return token;
 }
 
 static void convert_keywords(Token *token)
@@ -166,6 +180,12 @@ Token *tokenize(char *argInput)
             char *q = curInput;
             cur->value = strtoul(curInput, &curInput, 10);
             cur->length = curInput - q;
+            continue;
+        }
+        if (*curInput == '"')
+        {
+            cur = cur->next = read_string_literal(curInput);
+            curInput += cur->length;
             continue;
         }
         if (is_valid_first_identifier(*curInput))

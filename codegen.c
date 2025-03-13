@@ -1,7 +1,8 @@
 #include "Clyte.h"
 
 static int depth;
-static char *arguments_registers[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+static char *arguments_registers_8[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
+static char *arguments_registers_64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 static Bindable *current_function;
 
 static void generate_expression(Node *node);
@@ -77,13 +78,20 @@ static void load(Type *type)
         return;
     }
 
-    printf("  mov (%%rax), %%rax\n");
+    if (type->size == 1)
+        printf("  movsbq (%%rax), %%rax\n");
+    else
+        printf("  mov (%%rax), %%rax\n");
 }
 
-static void store(void)
+static void store(Type *type)
 {
     pop("%rdi");
-    printf("  mov %%rax, (%%rdi)\n");
+
+    if (type->size == 1)
+        printf("  mov %%al, (%%rdi)\n");
+    else
+        printf("  mov %%rax, (%%rdi)\n");
 }
 
 // Main assembly code generation from Nodes
@@ -116,7 +124,7 @@ void generate_expression(Node *node)
         generate_address(node->lhs);
         push();
         generate_expression(node->rhs);
-        store();
+        store(node->type);
         return;
     case NODE_FUNCTION_CALL:
     {
@@ -129,7 +137,7 @@ void generate_expression(Node *node)
         }
 
         for (int i = nargs - 1; i >= 0; i--)
-            pop(arguments_registers[i]);
+            pop(arguments_registers_64[i]);
 
         printf("  mov $0, %%rax\n");
         printf("  call %s\n", node->function_name);
@@ -239,7 +247,15 @@ static void generate_data(Bindable *funct)
         printf("  .data\n");
         printf("  .globl %s\n", var->name);
         printf("%s:\n", var->name);
-        printf("  .zero %d\n", var->type->size);
+        if (var->init_data)
+        {
+            for (int i = 0; i < var->type->size; i++)
+                printf("  .byte %d\n", var->init_data[i]);
+        }
+        else
+        {
+            printf("  .zero %d\n", var->type->size);
+        }
     }
 }
 
@@ -256,7 +272,12 @@ void code_generation(Bindable *function)
 
     int i = 0;
     for (Bindable *var = function->parameters; var; var = var->next)
-        printf("  mov %s, %d(%%rbp)\n", arguments_registers[i++], var->offset);
+    {
+        if (var->type->size == 1)
+            printf("  mov %s, %d(%%rbp)\n", arguments_registers_8[i++], var->offset);
+        else
+            printf("  mov %s, %d(%%rbp)\n", arguments_registers_64[i++], var->offset);
+    }
 
     generate_statement(function->body);
     assert(depth == 0);
