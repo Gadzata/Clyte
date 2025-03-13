@@ -2,7 +2,7 @@
 
 static int depth;
 static char *arguments_registers[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
-static Function *current_function;
+static Bindable *current_function;
 
 static void generate_expression(Node *node);
 
@@ -30,10 +30,13 @@ static int align_to(int n, int align)
     return (n + align - 1) / align * align;
 }
 
-static void assign_local_var_offsets(Function *program)
+static void assign_local_var_offsets(Bindable *program)
 {
-    for (Function *funct = program; funct; funct = funct->next)
+    for (Bindable *funct = program; funct; funct = funct->next)
     {
+        if (!funct->is_function)
+            continue;
+
         int offset = 0;
         for (Bindable *var = funct->locals; var; var = var->next)
         {
@@ -48,7 +51,14 @@ static void generate_address(Node *node)
 {
     if (node->kind == NODE_VAR)
     {
-        printf("  lea %d(%%rbp), %%rax\n", node->var->offset);
+        if (node->var->is_local_var)
+        {
+            printf("  lea %d(%%rbp), %%rax\n", node->var->offset);
+        }
+        else
+        {
+            printf("  lea %s(%%rip), %%rax\n", node->var->name);
+        }
         return;
     }
 
@@ -219,9 +229,24 @@ static void generate_statement(Node *node)
     error_at(node->token->location, "invalid statement");
 }
 
-void code_generation(Function *function)
+static void generate_data(Bindable *funct)
+{
+    for (Bindable *var = funct; var; var = var->next)
+    {
+        if (var->is_function)
+            continue;
+
+        printf("  .data\n");
+        printf("  .globl %s\n", var->name);
+        printf("%s:\n", var->name);
+        printf("  .zero %d\n", var->type->size);
+    }
+}
+
+void code_generation(Bindable *function)
 {
     printf("  .globl %s\n", function->name);
+    printf("  .text\n");
     printf("%s:\n", function->name);
     current_function = function;
 
@@ -242,12 +267,14 @@ void code_generation(Function *function)
     printf("  ret\n");
 }
 
-void codegen(Function *prog)
+void codegen(Bindable *prog)
 {
     assign_local_var_offsets(prog);
-
-    for (Function *function = prog; function; function = function->next)
+    generate_data(prog);
+    for (Bindable *function = prog; function; function = function->next)
     {
+        if (!function->is_function)
+            continue;
         code_generation(function);
     }
 }

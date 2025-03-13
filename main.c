@@ -10,7 +10,7 @@ int main(int argc, char **argv)
     char *input = argv[1];
 
     Token *token = tokenize(input);
-    Function *node = parse(token);
+    Bindable *node = parse(token);
 
     codegen(node);
     return 0;

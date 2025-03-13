@@ -43,17 +43,13 @@ typedef struct Bindable Bindable;
 struct Bindable
 {
     Bindable *next;
-    char *var_name;
-    Type *type;
-    int offset;
-};
-
-// Function Object
-typedef struct Function Function;
-struct Function
-{
-    Function *next;
     char *name;
+    Type *type;
+    bool is_local_var;
+    int offset;
+
+    bool is_function;
+
     Node *body;
     Bindable *parameters;
     Bindable *locals;
@@ -111,11 +107,11 @@ struct Node
     int value;
 };
 
-Function *parse(Token *token);
+Bindable *parse(Token *token);
 
 // Code generation
 
-void codegen(Function *prog);
+void codegen(Bindable *prog);
 
 typedef enum
 {

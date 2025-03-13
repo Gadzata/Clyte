@@ -1,6 +1,7 @@
 #include "Clyte.h"
 
 Bindable *locals;
+Bindable *global_vars;
 
 static Type *declare_type(Token **rest, Token *token);
 static Type *declarator(Token **rest, Token *token, Type *type);
@@ -30,8 +31,13 @@ static Node *new_node(NodeKind kind, Token *token)
 static Bindable *find_variable(Token *token)
 {
     for (Bindable *var = locals; var; var = var->next)
-        if (strlen(var->var_name) == token->length && !strncmp(token->location, var->var_name, token->length))
+        if (strlen(var->name) == token->length && !strncmp(token->location, var->name, token->length))
             return var;
+
+    for (Bindable *var = global_vars; var; var = var->next)
+        if (strlen(var->name) == token->length && !strncmp(token->location, var->name, token->length))
+            return var;
+
     return NULL;
 }
 
@@ -64,13 +70,28 @@ static Node *new_var_node(Bindable *variable, Token *token)
     return node;
 }
 
-static Bindable *new_local_var(char *name, Type *type)
+static Bindable *new_variable(char *name, Type *type)
 {
     Bindable *var = calloc(1, sizeof(Bindable));
-    var->var_name = name;
-    var->next = locals;
+    var->name = name;
     var->type = type;
+    return var;
+}
+
+static Bindable *new_local_var(char *name, Type *type)
+{
+    Bindable *var = new_variable(name, type);
+    var->is_local_var = true;
+    var->next = locals;
     locals = var;
+    return var;
+}
+
+static Bindable *new_global_var(char *name, Type *type)
+{
+    Bindable *var = new_variable(name, type);
+    var->next = global_vars;
+    global_vars = var;
     return var;
 }
 
@@ -481,6 +502,12 @@ static Node *primary(Token **rest, Token *token)
         *rest = skip(token, ")");
         return node;
     }
+    if (token_equal(token, "sizeof"))
+    {
+        Node *node = unary(rest, token->next);
+        add_node_type(node);
+        return new_number(node->type->size, token);
+    }
     if (token->kind == TOK_IDENT)
     {
         if (token_equal(token->next, "("))
@@ -501,31 +528,65 @@ static Node *primary(Token **rest, Token *token)
     error_at(token->location, "expected an expression");
 }
 
-static Function *function(Token **rest, Token *token)
+static Token *function(Token *token, Type *base_type)
 {
-    Type *type = declare_type(&token, token);
-    type = declarator(&token, token, type);
+    Type *type = declarator(&token, token, base_type);
+
+    Bindable *function = new_global_var(get_identation(type->name), type);
+    function->is_function = true;
 
     locals = NULL;
 
-    Function *function = calloc(1, sizeof(Function));
-    function->name = get_identation(type->name);
     create_param_local_vars(type->parameters);
     function->parameters = locals;
 
     token = skip(token, "{");
-    function->body = compound_statement(rest, token);
+    function->body = compound_statement(&token, token);
     function->locals = locals;
-    return function;
+    return token;
+}
+
+static Token *global_variable(Token *token, Type *base_type)
+{
+    bool first = true;
+
+    while (!consume_token(&token, token, ";"))
+    {
+        if (!first)
+            token = skip(token, ",");
+        first = false;
+
+        Type *ty = declarator(&token, token, base_type);
+        new_global_var(get_identation(ty->name), ty);
+    }
+    return token;
+}
+
+static bool is_function(Token *token)
+{
+    if (token_equal(token, ";"))
+        return false;
+
+    Type temp = {};
+    Type *ty = declarator(&token, token, &temp);
+    return ty->kind == TYPE_FUNC;
 }
 
 // program = function-definition*
-Function *parse(Token *token)
+Bindable *parse(Token *token)
 {
-    Function head = {};
-    Function *cur = &head;
+    global_vars = NULL;
 
     while (token->kind != TOK_EOF)
-        cur = cur->next = function(&token, token);
-    return head.next;
+    {
+        Type *base_type = declare_type(&token, token);
+        if (is_function(token))
+        {
+            token = function(token, base_type);
+            continue;
+        }
+
+        token = global_variable(token, base_type);
+    }
+    return global_vars;
 }
