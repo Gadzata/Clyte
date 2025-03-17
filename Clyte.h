@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,7 @@ typedef struct Type Type;
 typedef struct Node Node;
 
 char *format(char *fmt, ...);
+void println(char *fmt, ...);
 
 // Tokenizer
 
@@ -41,7 +43,7 @@ void error_at(char *location, const char *fmt, ...);
 bool token_equal(Token *token, char *op);
 Token *skip(Token *token, char *s);
 bool consume_token(Token **rest, Token *tok, char *str);
-Token *tokenize(char *input);
+Token *tokenize_file(char *filename);
 
 // Local Variable Object
 typedef struct Bindable Bindable;
@@ -85,6 +87,7 @@ typedef enum
     NODE_BLOCK,
     NODE_FUNCTION_CALL,
     NODE_EXPR_STMT,
+    NODE_STMT_EXPR,
     NODE_VAR,
     NODE_NUM,
 } NodeKind;

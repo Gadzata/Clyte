@@ -525,6 +525,13 @@ static Node *function_call(Token **rest, Token *token)
 
 static Node *primary(Token **rest, Token *token)
 {
+    if (token_equal(token, "(") && token_equal(token->next, "{"))
+    {
+        Node *node = new_node(NODE_STMT_EXPR, token);
+        node->body = compound_statement(&token, token->next->next)->body;
+        *rest = skip(token, ")");
+        return node;
+    }
     if (token_equal(token, "("))
     {
         Node *node = expression(&token, token->next);

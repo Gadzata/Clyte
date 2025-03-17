@@ -9,7 +9,7 @@ int main(int argc, char **argv)
 
     char *input = argv[1];
 
-    Token *token = tokenize(input);
+    Token *token = tokenize_file(argv[1]);
     Bindable *node = parse(token);
 
     codegen(node);

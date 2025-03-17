@@ -6,17 +6,18 @@ static char *arguments_registers_64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", 
 static Bindable *current_function;
 
 static void generate_expression(Node *node);
+static void generate_statement(Node *node);
 
 // Stack utility functions
 static void push(void)
 {
-    printf("  push %%rax\n");
+    println("  push %%rax");
     depth++;
 }
 
 static void pop(char *arg)
 {
-    printf("  pop %s\n", arg);
+    println("  pop %s", arg);
     depth--;
 }
 
@@ -54,11 +55,11 @@ static void generate_address(Node *node)
     {
         if (node->var->is_local_var)
         {
-            printf("  lea %d(%%rbp), %%rax\n", node->var->offset);
+            println("  lea %d(%%rbp), %%rax", node->var->offset);
         }
         else
         {
-            printf("  lea %s(%%rip), %%rax\n", node->var->name);
+            println("  lea %s(%%rip), %%rax", node->var->name);
         }
         return;
     }
@@ -79,9 +80,9 @@ static void load(Type *type)
     }
 
     if (type->size == 1)
-        printf("  movsbq (%%rax), %%rax\n");
+        println("  movsbq (%%rax), %%rax");
     else
-        printf("  mov (%%rax), %%rax\n");
+        println("  mov (%%rax), %%rax");
 }
 
 static void store(Type *type)
@@ -89,9 +90,9 @@ static void store(Type *type)
     pop("%rdi");
 
     if (type->size == 1)
-        printf("  mov %%al, (%%rdi)\n");
+        println("  mov %%al, (%%rdi)");
     else
-        printf("  mov %%rax, (%%rdi)\n");
+        println("  mov %%rax, (%%rdi)");
 }
 
 // Main assembly code generation from Nodes
@@ -103,11 +104,11 @@ void generate_expression(Node *node)
     switch (node->kind)
     {
     case NODE_NUM:
-        printf("  mov $%d, %%rax\n", node->value);
+        println("  mov $%d, %%rax", node->value);
         return;
     case NODE_NEG:
         generate_expression(node->lhs);
-        printf("  neg %%rax\n");
+        println("  neg %%rax");
         return;
     case NODE_VAR:
         generate_address(node);
@@ -126,6 +127,10 @@ void generate_expression(Node *node)
         generate_expression(node->rhs);
         store(node->type);
         return;
+    case NODE_STMT_EXPR:
+        for (Node *n = node->body; n; n = n->next)
+            generate_statement(n);
+        return;
     case NODE_FUNCTION_CALL:
     {
         int nargs = 0;
@@ -139,8 +144,8 @@ void generate_expression(Node *node)
         for (int i = nargs - 1; i >= 0; i--)
             pop(arguments_registers_64[i]);
 
-        printf("  mov $0, %%rax\n");
-        printf("  call %s\n", node->function_name);
+        println("  mov $0, %%rax");
+        println("  call %s", node->function_name);
         return;
     }
     }
@@ -157,15 +162,15 @@ void generate_expression(Node *node)
         [NODE_DIV] = "idiv"};
 
     if (node->kind == NODE_DIV)
-        printf("  cqo\n");
+        println("  cqo");
 
     if (node->kind >= NODE_ADD && node->kind <= NODE_DIV)
     {
-        printf("  %s %%rdi, %%rax\n", binary_ops[node->kind]);
+        println("  %s %%rdi, %%rax", binary_ops[node->kind]);
         return;
     }
 
-    printf("  cmp %%rdi, %%rax\n");
+    println("  cmp %%rdi, %%rax");
 
     static const char *cmp_ops[] = {
         [NODE_EQ] = "sete",
@@ -175,8 +180,8 @@ void generate_expression(Node *node)
 
     if (node->kind >= NODE_EQ && node->kind <= NODE_LE)
     {
-        printf("  %s %%al\n", cmp_ops[node->kind]);
-        printf("  movzb %%al, %%rax\n");
+        println("  %s %%al", cmp_ops[node->kind]);
+        println("  movzb %%al, %%rax");
         return;
     }
 
@@ -195,14 +200,14 @@ static void generate_statement(Node *node)
     {
         int c = count();
         generate_expression(node->cond);
-        printf("  cmp $0, %%rax\n");
-        printf("  je  .L.else.%d\n", c);
+        println("  cmp $0, %%rax");
+        println("  je  .L.else.%d", c);
         generate_statement(node->then);
-        printf("  jmp .L.end.%d\n", c);
-        printf(".L.else.%d:\n", c);
+        println("  jmp .L.end.%d", c);
+        println(".L.else.%d:", c);
         if (node->els)
             generate_statement(node->els);
-        printf(".L.end.%d:\n", c);
+        println(".L.end.%d:", c);
         return;
     }
     if (node->kind == NODE_FOR)
@@ -210,18 +215,18 @@ static void generate_statement(Node *node)
         int c = count();
         if (node->init)
             generate_statement(node->init);
-        printf(".L.begin.%d:\n", c);
+        println(".L.begin.%d:", c);
         if (node->cond)
         {
             generate_expression(node->cond);
-            printf("  cmp $0, %%rax\n");
-            printf("  je  .L.end.%d\n", c);
+            println("  cmp $0, %%rax");
+            println("  je  .L.end.%d", c);
         }
         generate_statement(node->then);
         if (node->increment)
             generate_expression(node->increment);
-        printf("  jmp .L.begin.%d\n", c);
-        printf(".L.end.%d:\n", c);
+        println("  jmp .L.begin.%d", c);
+        println(".L.end.%d:", c);
         return;
     }
     if (node->kind == NODE_EXPR_STMT || node->kind == NODE_RETURN)
@@ -229,7 +234,7 @@ static void generate_statement(Node *node)
         generate_expression(node->lhs);
         if (node->kind == NODE_RETURN)
         {
-            printf("  jmp .L.return.%s\n", current_function->name);
+            println("  jmp .L.return.%s", current_function->name);
         }
         return;
     }
@@ -244,48 +249,48 @@ static void generate_data(Bindable *funct)
         if (var->is_function)
             continue;
 
-        printf("  .data\n");
-        printf("  .globl %s\n", var->name);
-        printf("%s:\n", var->name);
+        println("  .data");
+        println("  .globl %s", var->name);
+        println("%s:", var->name);
         if (var->init_data)
         {
             for (int i = 0; i < var->type->size; i++)
-                printf("  .byte %d\n", var->init_data[i]);
+                println("  .byte %d", var->init_data[i]);
         }
         else
         {
-            printf("  .zero %d\n", var->type->size);
+            println("  .zero %d", var->type->size);
         }
     }
 }
 
 void code_generation(Bindable *function)
 {
-    printf("  .globl %s\n", function->name);
-    printf("  .text\n");
-    printf("%s:\n", function->name);
+    println("  .globl %s", function->name);
+    println("  .text");
+    println("%s:", function->name);
     current_function = function;
 
-    printf("  push %%rbp\n");
-    printf("  mov %%rsp, %%rbp\n");
-    printf("  sub $%d, %%rsp\n", function->stack_size);
+    println("  push %%rbp");
+    println("  mov %%rsp, %%rbp");
+    println("  sub $%d, %%rsp", function->stack_size);
 
     int i = 0;
     for (Bindable *var = function->parameters; var; var = var->next)
     {
         if (var->type->size == 1)
-            printf("  mov %s, %d(%%rbp)\n", arguments_registers_8[i++], var->offset);
+            println("  mov %s, %d(%%rbp)", arguments_registers_8[i++], var->offset);
         else
-            printf("  mov %s, %d(%%rbp)\n", arguments_registers_64[i++], var->offset);
+            println("  mov %s, %d(%%rbp)", arguments_registers_64[i++], var->offset);
     }
 
     generate_statement(function->body);
     assert(depth == 0);
 
-    printf(".L.return.%s:\n", function->name);
-    printf("  mov %%rbp, %%rsp\n");
-    printf("  pop %%rbp\n");
-    printf("  ret\n");
+    println(".L.return.%s:", function->name);
+    println("  mov %%rbp, %%rsp");
+    println("  pop %%rbp");
+    println("  ret");
 }
 
 void codegen(Bindable *prog)

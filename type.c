@@ -97,5 +97,19 @@ void add_node_type(Node *node)
             error_at(node->token->location, "invalid pointer dereference");
         node->type = node->lhs->type->base;
         return;
+    case NODE_STMT_EXPR:
+        if (node->body)
+        {
+            Node *stmt = node->body;
+            while (stmt->next)
+                stmt = stmt->next;
+            if (stmt->kind == NODE_EXPR_STMT)
+            {
+                node->type = stmt->lhs->type;
+                return;
+            }
+        }
+        error_at(node->token->location, "statement expression returning void is not supported");
+        return;
     }
 }
