@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+extern FILE *output_file;
+
 typedef struct Type Type;
 typedef struct Node Node;
 
@@ -121,7 +123,7 @@ Bindable *parse(Token *token);
 
 // Code generation
 
-void codegen(Bindable *prog);
+void codegen(Bindable *prog, FILE *out);
 
 typedef enum
 {

@@ -19,7 +19,7 @@ void println(char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vprintf(fmt, ap);
+    vfprintf(output_file, fmt, ap);
     va_end(ap);
-    printf("\n");
+    fprintf(output_file, "\n");
 }

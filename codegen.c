@@ -1,5 +1,6 @@
 #include "Clyte.h"
 
+FILE *output_file = NULL;
 static int depth;
 static char *arguments_registers_8[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 static char *arguments_registers_64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
@@ -293,8 +294,10 @@ void code_generation(Bindable *function)
     println("  ret");
 }
 
-void codegen(Bindable *prog)
+void codegen(Bindable *prog, FILE *out)
 {
+    output_file = out;
+
     assign_local_var_offsets(prog);
     generate_data(prog);
     for (Bindable *function = prog; function; function = function->next)
