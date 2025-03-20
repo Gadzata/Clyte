@@ -1,0 +1,1 @@
+#define TEST(expected, actual) test_code(expected, actual, #actual)

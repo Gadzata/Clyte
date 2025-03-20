@@ -102,25 +102,21 @@ static bool is_comparison_punct(char *cur_input)
     }
 }
 
-// Returns true if the identChar is a value in between first and last
 static bool character_between_values(char identChar, char first, char last)
 {
     return first <= identChar && identChar <= last;
 }
 
-// Returns true if identChar is an alphabetic character or an underscore.
 static bool is_alpha_or_underscore(char identChar)
 {
     return (character_between_values(identChar, 'a', 'z')) || (character_between_values(identChar, 'A', 'Z')) || identChar == '_';
 }
 
-// Returns true if identChar is valid as the first character of an identifier.
 static bool is_valid_first_identifier(char identChar)
 {
     return is_alpha_or_underscore(identChar);
 }
 
-// Returns true if identChar is valid as a non-first character of an identifier.
 static bool is_valid_non_first_identifier(char identChar)
 {
     return is_valid_first_identifier(identChar) || (character_between_values(identChar, '0', '9'));
@@ -232,6 +228,22 @@ static Token *tokenize(char *filename, char *input)
     // Looping through the input
     while (*cur_input)
     {
+        if (starts_with(cur_input, "//"))
+        {
+            cur_input += 2;
+            while (*cur_input != '\n')
+                cur_input++;
+            continue;
+        }
+
+        if (starts_with(cur_input, "/*"))
+        {
+            char *temp_input = strstr(cur_input + 2, "*/");
+            if (!temp_input)
+                error_at(cur_input, "There is an unclosed block comment");
+            cur_input = temp_input + 2;
+            continue;
+        }
         if (isspace(*cur_input))
         {
             cur_input++;
@@ -240,9 +252,9 @@ static Token *tokenize(char *filename, char *input)
         if (isdigit(*cur_input))
         {
             cur = cur->next = new_token(TOK_NUM, cur_input, cur_input);
-            char *q = cur_input;
+            char *temp_input = cur_input;
             cur->value = strtoul(cur_input, &cur_input, 10);
-            cur->length = cur_input - q;
+            cur->length = cur_input - temp_input;
             continue;
         }
         if (*cur_input == '"')

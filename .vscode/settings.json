@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "clyte.h": "c"
+        "clyte.h": "c",
+        "utilheader.h": "c",
+        "util_header.h": "c"
     }
 }

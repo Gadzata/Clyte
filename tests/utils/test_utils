@@ -1,0 +1,15 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+void test_code(int expected, int actual, const char *expression)
+{
+    if (expected == actual)
+    {
+        printf("%s => %d\n", expression, actual);
+    }
+    else
+    {
+        fprintf(stderr, "Assertion failed: %s => Expected %d, but got %d\n", expression, expected, actual);
+        exit(EXIT_FAILURE);
+    }
+}

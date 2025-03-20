@@ -1,7 +1,26 @@
 #include "Clyte.h"
 
+// Variable scope
+typedef struct VariableScope VariableScope;
+struct VariableScope
+{
+    VariableScope *next;
+    char *name;
+    Bindable *variable;
+};
+
+// Block scope.
+typedef struct Scope Scope;
+struct Scope
+{
+    Scope *next;
+    VariableScope *variables;
+};
+
 Bindable *locals;
 Bindable *global_vars;
+
+static Scope *scope = &(Scope){};
 
 static Type *declare_type(Token **rest, Token *token);
 static Type *declarator(Token **rest, Token *token, Type *type);
@@ -28,17 +47,41 @@ static Node *new_node(NodeKind kind, Token *token)
     return node;
 }
 
+static void enter_code_scope()
+{
+    Scope *cur_scope = calloc(1, sizeof(Scope));
+    cur_scope->next = scope;
+    scope = cur_scope;
+}
+
+static void leave_code_scope()
+{
+    scope = scope->next;
+}
+
 static Bindable *find_variable(Token *token)
 {
-    for (Bindable *var = locals; var; var = var->next)
-        if (strlen(var->name) == token->length && !strncmp(token->location, var->name, token->length))
-            return var;
-
-    for (Bindable *var = global_vars; var; var = var->next)
-        if (strlen(var->name) == token->length && !strncmp(token->location, var->name, token->length))
-            return var;
-
+    for (Scope *scp = scope; scp; scp = scp->next)
+    {
+        for (VariableScope *scope2 = scp->variables; scope2; scope2 = scope2->next)
+        {
+            if (token_equal(token, scope2->name))
+            {
+                return scope2->variable;
+            }
+        }
+    }
     return NULL;
+}
+
+static VariableScope *push_var_scope(char *name, Bindable *var)
+{
+    VariableScope *scp = calloc(1, sizeof(VariableScope));
+    scp->name = name;
+    scp->variable = var;
+    scp->next = scope->variables;
+    scope->variables = scp;
+    return scp;
 }
 
 static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *token)
@@ -72,27 +115,28 @@ static Node *new_var_node(Bindable *variable, Token *token)
 
 static Bindable *new_variable(char *name, Type *type)
 {
-    Bindable *var = calloc(1, sizeof(Bindable));
-    var->name = name;
-    var->type = type;
-    return var;
+    Bindable *variable = calloc(1, sizeof(Bindable));
+    variable->name = name;
+    variable->type = type;
+    push_var_scope(name, variable);
+    return variable;
 }
 
 static Bindable *new_local_var(char *name, Type *type)
 {
-    Bindable *var = new_variable(name, type);
-    var->is_local_var = true;
-    var->next = locals;
-    locals = var;
-    return var;
+    Bindable *variable = new_variable(name, type);
+    variable->is_local_var = true;
+    variable->next = locals;
+    locals = variable;
+    return variable;
 }
 
 static Bindable *new_global_var(char *name, Type *type)
 {
-    Bindable *var = new_variable(name, type);
-    var->next = global_vars;
-    global_vars = var;
-    return var;
+    Bindable *variable = new_variable(name, type);
+    variable->next = global_vars;
+    global_vars = variable;
+    return variable;
 }
 
 static Node *get_comparison_node(Token **rest, Token *token, Node *node)
@@ -331,6 +375,9 @@ static Node *compound_statement(Token **rest, Token *token)
 {
     Node head = {};
     Node *cur = &head;
+
+    enter_code_scope();
+
     while (!token_equal(token, "}"))
     {
         if (is_typename(token))
@@ -339,6 +386,8 @@ static Node *compound_statement(Token **rest, Token *token)
             cur = cur->next = statement(&token, token);
         add_node_type(cur);
     }
+
+    leave_code_scope();
 
     Node *node = new_node(NODE_BLOCK, token);
     node->body = head.next;
@@ -578,6 +627,7 @@ static Token *function(Token *token, Type *base_type)
     function->is_function = true;
 
     locals = NULL;
+    enter_code_scope();
 
     create_param_local_vars(type->parameters);
     function->parameters = locals;
@@ -585,6 +635,8 @@ static Token *function(Token *token, Type *base_type)
     token = skip(token, "{");
     function->body = compound_statement(&token, token);
     function->locals = locals;
+    leave_code_scope();
+
     return token;
 }
 
