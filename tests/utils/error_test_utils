@@ -1,0 +1,23 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+void run_error_test(const char *code)
+{
+    FILE *f = fopen("tmp_fail.c", "w");
+    if (!f)
+    {
+        perror("fopen");
+        exit(1);
+    }
+    fprintf(f, "%s\n", code);
+    fclose(f);
+
+    if (system("./Clyte -o /dev/null tmp_fail.c") == 0)
+    {
+        fprintf(stderr, "FAIL: Expected failure but compiled:\n%s\n", code);
+        exit(1);
+    }
+
+    printf("PASS (error expected): %s\n", code);
+}

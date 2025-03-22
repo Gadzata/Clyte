@@ -1,0 +1,40 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+void run_test(int expected, const char *code)
+{
+    FILE *f = fopen("tmp.c", "w");
+    if (!f)
+    {
+        perror("fopen");
+        exit(1);
+    }
+    fprintf(f, "%s\n", code);
+    fclose(f);
+
+    // Compile using Clyte
+    if (system("./Clyte -o tmp.s tmp.c") != 0)
+    {
+        fprintf(stderr, "Clyte failed to compile:\n%s\n", code);
+        exit(1);
+    }
+
+    // Assemble and link
+    if (system("cc -o tmp tmp.s") != 0)
+    {
+        fprintf(stderr, "GCC failed to assemble tmp.s\n");
+        exit(1);
+    }
+
+    // Run the compiled program
+    int actual = system("./tmp") >> 8;
+
+    if (actual != expected)
+    {
+        fprintf(stderr, "FAIL: Expected %d, but got %d\nCode: %s\n", expected, actual, code);
+        exit(1);
+    }
+
+    printf("PASS: %s => %d\n", code, actual);
+}
