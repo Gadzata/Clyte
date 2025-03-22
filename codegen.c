@@ -28,7 +28,7 @@ static int count(void)
     return i++;
 }
 
-static int align_to(int n, int align)
+int align_to(int n, int align)
 {
     return (n + align - 1) / align * align;
 }
@@ -44,6 +44,7 @@ static void assign_local_var_offsets(Bindable *program)
         for (Bindable *var = funct->locals; var; var = var->next)
         {
             offset += var->type->size;
+            offset = align_to(offset, var->type->align);
             var->offset = -offset;
         }
         funct->stack_size = align_to(offset, 16);
@@ -70,12 +71,25 @@ static void generate_address(Node *node)
         generate_expression(node->lhs);
         return;
     }
+    if (node->kind == NODE_COMMA)
+    {
+        generate_expression(node->lhs);
+        generate_address(node->rhs);
+        return;
+    }
+    if (node->kind == NODE_STRUCT)
+    {
+        generate_address(node->lhs);
+        println("  add $%d, %%rax", node->struct_object->offset);
+        return;
+    }
+
     error_at(node->token->location, "not an lvalue");
 }
 
 static void load(Type *type)
 {
-    if (type->kind == TYPE_ARRAY)
+    if (type->kind == TYPE_ARRAY || type->kind == TYPE_STRUCT || type->kind == TYPE_UNION)
     {
         return;
     }
@@ -89,6 +103,16 @@ static void load(Type *type)
 static void store(Type *type)
 {
     pop("%rdi");
+
+    if (type->kind == TYPE_STRUCT || type->kind == TYPE_UNION)
+    {
+        for (int i = 0; i < type->size; i++)
+        {
+            println("  mov %d(%%rax), %%r8b", i);
+            println("  mov %%r8b, %d(%%rdi)", i);
+        }
+        return;
+    }
 
     if (type->size == 1)
         println("  mov %%al, (%%rdi)");
@@ -112,6 +136,7 @@ void generate_expression(Node *node)
         println("  neg %%rax");
         return;
     case NODE_VAR:
+    case NODE_STRUCT:
         generate_address(node);
         load(node->type);
         return;
@@ -131,6 +156,10 @@ void generate_expression(Node *node)
     case NODE_STMT_EXPR:
         for (Node *n = node->body; n; n = n->next)
             generate_statement(n);
+        return;
+    case NODE_COMMA:
+        generate_expression(node->lhs);
+        generate_expression(node->rhs);
         return;
     case NODE_FUNCTION_CALL:
     {

@@ -41,6 +41,8 @@ int main()
     TEST(4, ({ int x=4; { int x=3; } x; }));
     TEST(4, ({ int x=4; { int x=3; } int y=4; x; }));
     TEST(4, ({ int x=2; { x=4; } x; }));
+    TEST(15, ({ int x; int y; char z; char *a=&y; char *b=&z; b-a; }));
+    TEST(1, ({ int x; char y; int z; char *a=&y; char *b=&z; b-a; }));
 
     printf("OK\n");
     return 0;

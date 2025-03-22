@@ -1,7 +1,16 @@
 #include "Clyte.h"
 
-Type *ty_char = &(Type){TYPE_CHAR, 1};
-Type *ty_int = &(Type){TYPE_INT, 8};
+Type *ty_char = &(Type){TYPE_CHAR, 1, 1};
+Type *ty_int = &(Type){TYPE_INT, 8, 8};
+
+static Type *new_type(TypeKind kind, int size, int align)
+{
+    Type *ty = calloc(1, sizeof(Type));
+    ty->kind = kind;
+    ty->size = size;
+    ty->align = align;
+    return ty;
+}
 
 bool is_integer(Type *type)
 {
@@ -10,9 +19,7 @@ bool is_integer(Type *type)
 
 Type *pointer_to(Type *base)
 {
-    Type *type = calloc(1, sizeof(Type));
-    type->kind = TYPE_PTR;
-    type->size = 8;
+    Type *type = new_type(TYPE_PTR, 8, 8);
     type->base = base;
     return type;
 }
@@ -34,9 +41,7 @@ Type *copy_type(Type *type)
 
 Type *array_of(Type *base, int len)
 {
-    Type *type = calloc(1, sizeof(Type));
-    type->kind = TYPE_ARRAY;
-    type->size = base->size * len;
+    Type *type = new_type(TYPE_ARRAY, base->size * len, base->align);
     type->base = base;
     type->array_len = len;
     return type;
@@ -85,6 +90,12 @@ void add_node_type(Node *node)
         return;
     case NODE_VAR:
         node->type = node->var->type;
+        return;
+    case NODE_COMMA:
+        node->type = node->rhs->type;
+        return;
+    case NODE_STRUCT:
+        node->type = node->struct_object->type;
         return;
     case NODE_ADDR:
         if (node->lhs->type->kind == TYPE_ARRAY)

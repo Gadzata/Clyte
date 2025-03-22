@@ -9,12 +9,21 @@ struct VariableScope
     Bindable *variable;
 };
 
+typedef struct StructScope StructScope;
+struct StructScope
+{
+    StructScope *next;
+    char *name;
+    Type *ty;
+};
+
 // Block scope.
 typedef struct Scope Scope;
 struct Scope
 {
     Scope *next;
     VariableScope *variables;
+    StructScope *structs;
 };
 
 Bindable *locals;
@@ -34,8 +43,10 @@ static Node *equality(Token **rest, Token *token);
 static Node *relational(Token **rest, Token *token);
 static Node *add(Token **rest, Token *token);
 static Node *multiply(Token **rest, Token *token);
-static Node *postfix(Token **rest, Token *tok);
-static Node *unary(Token **rest, Token *tok);
+static Type *struct_declaration(Token **rest, Token *token);
+static Type *union_declaration(Token **rest, Token *token);
+static Node *postfix(Token **rest, Token *token);
+static Node *unary(Token **rest, Token *token);
 static Node *primary(Token **rest, Token *token);
 
 // Node utility functions
@@ -71,6 +82,15 @@ static Bindable *find_variable(Token *token)
             }
         }
     }
+    return NULL;
+}
+
+static Type *find_struct(Token *token)
+{
+    for (Scope *sc = scope; sc; sc = sc->next)
+        for (StructScope *sc2 = sc->structs; sc2; sc2 = sc2->next)
+            if (token_equal(token, sc2->name))
+                return sc2->ty;
     return NULL;
 }
 
@@ -179,6 +199,15 @@ static int get_number(Token *token)
     return token->value;
 }
 
+static void push_struct_scope(Token *token, Type *ty)
+{
+    StructScope *sc = calloc(1, sizeof(StructScope));
+    sc->name = strndup(token->location, token->length);
+    sc->ty = ty;
+    sc->next = scope->structs;
+    scope->structs = sc;
+}
+
 static Type *function_params(Token **rest, Token *token, Type *type)
 {
     Type head = {};
@@ -249,8 +278,23 @@ static Type *declare_type(Token **rest, Token *token)
         return ty_char;
     }
 
-    *rest = skip(token, "int");
-    return ty_int;
+    if (token_equal(token, "int"))
+    {
+        *rest = token->next;
+        return ty_int;
+    }
+
+    if (token_equal(token, "struct"))
+    {
+        return struct_declaration(rest, token->next);
+    }
+
+    if (token_equal(token, "union"))
+    {
+        return union_declaration(rest, token->next);
+    }
+
+    error_at(token->location, "typename expected");
 }
 
 // declarator = "*"* ident
@@ -300,7 +344,8 @@ static Node *declaration(Token **rest, Token *token)
 
 static bool is_typename(Token *token)
 {
-    return token_equal(token, "char") || token_equal(token, "int");
+    return token_equal(token, "char") || token_equal(token, "int") ||
+           token_equal(token, "struct") || token_equal(token, "union");
 }
 
 static void create_param_local_vars(Type *param)
@@ -410,7 +455,13 @@ static Node *expression_statement(Token **rest, Token *token)
 
 static Node *expression(Token **rest, Token *token)
 {
-    return assign(rest, token);
+    Node *node = assign(&token, token);
+
+    if (token_equal(token, ","))
+        return new_binary(NODE_COMMA, node, expression(rest, token->next), token);
+
+    *rest = token;
+    return node;
 }
 
 static Node *assign(Token **rest, Token *token)
@@ -534,21 +585,178 @@ static Node *unary(Token **rest, Token *token)
     return postfix(rest, token);
 }
 
+static void struct_members(Token **rest, Token *token, Type *ty)
+{
+    Structs head = {};
+    Structs *cur = &head;
+
+    while (!token_equal(token, "}"))
+    {
+        Type *basety = declare_type(&token, token);
+        int i = 0;
+
+        while (!consume_token(&token, token, ";"))
+        {
+            if (i++)
+                token = skip(token, ",");
+
+            Structs *struct_prop = calloc(1, sizeof(Structs));
+            struct_prop->type = declarator(&token, token, basety);
+            struct_prop->name = struct_prop->type->name;
+            cur = cur->next = struct_prop;
+        }
+    }
+
+    *rest = token->next;
+    ty->structs = head.next;
+}
+
+static Type *struct_union_declaration(Token **rest, Token *token)
+{
+    Token *tag = NULL;
+    if (token->kind == TOK_IDENT)
+    {
+        tag = token;
+        token = token->next;
+    }
+
+    if (tag && !token_equal(token, "{"))
+    {
+        Type *ty = find_struct(tag);
+        if (!ty)
+        {
+            error_at(tag->location, "unknown struct type");
+        }
+        *rest = token;
+        return ty;
+    }
+
+    Type *type = calloc(1, sizeof(Type));
+    type->kind = TYPE_STRUCT;
+    struct_members(rest, token->next, type);
+    type->align = 1;
+
+    if (tag)
+    {
+        push_struct_scope(tag, type);
+    }
+
+    return type;
+}
+
+static Type *struct_declaration(Token **rest, Token *token)
+{
+    Type *type = struct_union_declaration(rest, token);
+    type->kind = TYPE_STRUCT;
+
+    int offset = 0;
+    for (Structs *struct_prop = type->structs; struct_prop; struct_prop = struct_prop->next)
+    {
+        offset = align_to(offset, struct_prop->type->align);
+        struct_prop->offset = offset;
+        offset += struct_prop->type->size;
+
+        if (type->align < struct_prop->type->align)
+        {
+            type->align = struct_prop->type->align;
+        }
+    }
+
+    type->size = align_to(offset, type->align);
+    return type;
+}
+
+static Type *union_declaration(Token **rest, Token *token)
+{
+    Type *type = struct_union_declaration(rest, token);
+    type->kind = TYPE_UNION;
+
+    for (Structs *struct_prop = type->structs; struct_prop; struct_prop = struct_prop->next)
+    {
+        if (type->align < struct_prop->type->align)
+        {
+            type->align = struct_prop->type->align;
+        }
+        if (type->size < struct_prop->type->size)
+        {
+            type->size = struct_prop->type->size;
+        }
+    }
+    type->size = align_to(type->size, type->align);
+    return type;
+}
+
+static Structs *get_struct_member(Type *ty, Token *token)
+{
+    for (Structs *mem = ty->structs; mem; mem = mem->next)
+    {
+        if (mem->name->length == token->length && !strncmp(mem->name->location, token->location, token->length))
+        {
+            return mem;
+        }
+    }
+    error_at(token->location, "no such member");
+}
+
+static Node *struct_reference(Node *lhs, Token *token)
+{
+    add_node_type(lhs);
+    if (lhs->type->kind != TYPE_STRUCT && lhs->type->kind != TYPE_UNION)
+    {
+        error_at(lhs->token->location, "not a struct");
+    }
+
+    Node *node = new_unary(NODE_STRUCT, lhs, token);
+    node->struct_object = get_struct_member(lhs->type, token);
+    return node;
+}
+
 static Node *postfix(Token **rest, Token *token)
 {
     Node *node = primary(&token, token);
 
-    while (token_equal(token, "["))
+    for (;;)
     {
-        Token *start = token;
-        Node *index = expression(&token, token->next);
-        token = skip(token, "]");
-        node = new_unary(NODE_DEREF, new_add(node, index, start), start);
+        if (!token)
+        {
+            break;
+        }
+
+        if (token_equal(token, "["))
+        {
+            Token *start = token;
+            Node *index = expression(&token, token->next);
+            token = skip(token, "]");
+            node = new_unary(NODE_DEREF, new_add(node, index, start), start);
+            continue;
+        }
+
+        if (token_equal(token, "."))
+        {
+            if (!node)
+                error_at(token->location, "Expected struct before '.'");
+
+            node = struct_reference(node, token->next);
+            if (!token->next || !token->next->next)
+                error_at(token->location, "unexpected end of token stream after '.'");
+            token = token->next->next;
+            continue;
+        }
+
+        if (token_equal(token, "->"))
+        {
+            node = new_unary(NODE_DEREF, node, token);
+            node = struct_reference(node, token->next);
+            token = token->next->next;
+            continue;
+        }
+
+        break;
     }
+
     *rest = token;
     return node;
 }
-
 static Node *function_call(Token **rest, Token *token)
 {
     Token *start = token;
@@ -574,9 +782,14 @@ static Node *function_call(Token **rest, Token *token)
 
 static Node *primary(Token **rest, Token *token)
 {
+    if (!token)
+        error("Unexpected end of input");
+
     if (token_equal(token, "(") && token_equal(token->next, "{"))
     {
         Node *node = new_node(NODE_STMT_EXPR, token);
+        if (!token->next || !token->next->next)
+            error_at(token->location, "unexpected end of token stream after '.'");
         node->body = compound_statement(&token, token->next->next)->body;
         *rest = skip(token, ")");
         return node;
@@ -659,7 +872,10 @@ static Token *global_variable(Token *token, Type *base_type)
 static bool is_function(Token *token)
 {
     if (token_equal(token, ";"))
+    {
+        token->next;
         return false;
+    }
 
     Type temp = {};
     Type *ty = declarator(&token, token, &temp);

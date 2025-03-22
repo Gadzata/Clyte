@@ -12,6 +12,7 @@ extern FILE *output_file;
 
 typedef struct Type Type;
 typedef struct Node Node;
+typedef struct Structs Structs;
 
 char *format(char *fmt, ...);
 void println(char *fmt, ...);
@@ -81,6 +82,8 @@ typedef enum
     NODE_LT,
     NODE_LE,
     NODE_ASSIGN,
+    NODE_COMMA,
+    NODE_STRUCT,
     NODE_ADDR,
     NODE_DEREF,
     NODE_RETURN,
@@ -104,6 +107,7 @@ struct Node
     Node *rhs;
 
     Node *body;
+    Structs *struct_object;
 
     char *function_name;
     Node *arguments_list;
@@ -132,18 +136,30 @@ typedef enum
     TYPE_PTR,
     TYPE_FUNC,
     TYPE_ARRAY,
+    TYPE_STRUCT,
+    TYPE_UNION,
 } TypeKind;
 
 struct Type
 {
     TypeKind kind;
     int size;
+    int align;
     Type *base;
     Token *name;
     Type *return_type;
     Type *parameters;
     Type *next;
     int array_len;
+    Structs *structs;
+};
+
+struct Structs
+{
+    Structs *next;
+    Type *type;
+    Token *name;
+    int offset;
 };
 
 extern Type *ty_char;
@@ -155,3 +171,6 @@ Type *pointer_to(Type *base);
 Type *function_type(Type *return_type);
 Type *array_of(Type *base, int size);
 void add_node_type(Node *node);
+int align_to(int n, int align);
+
+#define TRACE(msg, t) fprintf(stderr, "TRACE: %s at token '%.*s'\n", msg, (t)->length, (t)->location)

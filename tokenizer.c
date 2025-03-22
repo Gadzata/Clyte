@@ -92,7 +92,7 @@ static bool starts_with(char *cur_input, char *op)
 static bool is_comparison_punct(char *cur_input)
 {
     if (starts_with(cur_input, "==") || starts_with(cur_input, "!=") ||
-        starts_with(cur_input, "<=") || starts_with(cur_input, ">="))
+        starts_with(cur_input, "<=") || starts_with(cur_input, ">=") || starts_with(cur_input, "->"))
     {
         return true;
     }
@@ -144,6 +144,8 @@ static bool is_keyword(Token *tok)
         "int",
         "sizeof",
         "char",
+        "struct",
+        "union",
     };
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
@@ -283,6 +285,7 @@ static Token *tokenize(char *filename, char *input)
         error_at(cur_input, "invalid token");
     }
     cur = cur->next = new_token(TOK_EOF, cur_input, cur_input);
+    cur->next = NULL;
 
     convert_keywords(head.next);
     return head.next;

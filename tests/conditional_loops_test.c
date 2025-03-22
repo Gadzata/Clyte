@@ -13,6 +13,10 @@ int main()
     TEST(10, ({ int i=0; while(i<10) i=i+1; i; }));
     TEST(66, ({ int i=0; int j=0; while(i<=11) {j=i+j; i=i+1;} j; }));
 
+    TEST(3, (1, 2, 3));
+    TEST(5, ({ int i=2, j=3; (i=5, j=6); i; })); // i is still 5
+    TEST(6, ({ int i=2, j=3; (i=5, j=6); j; })); // j becomes 6
+
     printf("OK\n");
     return 0;
 }
