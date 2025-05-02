@@ -2,6 +2,8 @@
     "files.associations": {
         "clyte.h": "c",
         "utilheader.h": "c",
-        "util_header.h": "c"
+        "util_header.h": "c",
+        "test_utils": "cpp",
+        "program_test_utils": "cpp"
     }
 }

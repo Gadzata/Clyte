@@ -2,7 +2,6 @@
 
 int main()
 {
-    // TEST(66, ({ int i=0; int j=0; while(i<=11) {j=i+j; i=i+1;} j; }));
     TEST(1, ({ struct {int a; int b;} x; x.a=1; x.b=2; x.a; }));
     TEST(2, ({ struct {int a; int b;} x; x.a=1; x.b=2; x.b; }));
     TEST(1, ({ struct {char a; int b; char c;} x; x.a=1; x.b=2; x.c=3; x.a; }));

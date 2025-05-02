@@ -14,8 +14,8 @@ int main()
     TEST(66, ({ int i=0; int j=0; while(i<=11) {j=i+j; i=i+1;} j; }));
 
     TEST(3, (1, 2, 3));
-    TEST(5, ({ int i=2, j=3; (i=5, j=6); i; })); // i is still 5
-    TEST(6, ({ int i=2, j=3; (i=5, j=6); j; })); // j becomes 6
+    TEST(5, ({ int i=2, j=3; (i=5, j=6); i; }));
+    TEST(6, ({ int i=2, j=3; (i=5, j=6); j; }));
 
     printf("OK\n");
     return 0;
